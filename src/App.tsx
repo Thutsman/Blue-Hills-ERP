@@ -1,0 +1,4066 @@
+import {
+  Activity,
+  BedDouble,
+  Bell,
+  CalendarDays,
+  ChefHat,
+  ClipboardCheck,
+  ClipboardCopy,
+  CreditCard,
+  DoorOpen,
+  FileText,
+  Home,
+  Hotel,
+  KeyRound,
+  LayoutDashboard,
+  LogOut,
+  Package,
+  Plus,
+  Printer,
+  Receipt,
+  Search,
+  Settings,
+  ShieldCheck,
+  ShoppingCart,
+  Sparkles,
+  Utensils,
+  Warehouse,
+  X,
+} from "lucide-react";
+import { useMemo, useState } from "react";
+import type { LucideIcon } from "lucide-react";
+
+type ModuleId =
+  | "dashboard"
+  | "frontOffice"
+  | "restaurant"
+  | "operations"
+  | "procurement"
+  | "finance";
+
+type ReservationStatus =
+  | "Tentative"
+  | "Confirmed"
+  | "Guaranteed"
+  | "Checked In"
+  | "Checked Out"
+  | "Cancelled";
+
+type PaymentMethod = "Cash" | "Ecocash" | "Bank Transfer" | "Card";
+
+type PaymentStatus = "Paid" | "Deposit Paid" | "Outstanding";
+type Lodge = "Zebra" | "Kudu" | "Impala" | "Dormitory";
+type RoomStatus = "Available" | "Occupied" | "Dirty" | "Maintenance" | "Staff";
+type KitchenStatus = "New" | "Preparing" | "Ready" | "Completed";
+type ApprovalStatus = "Awaiting Approval" | "Approved" | "Goods Received";
+
+type Room = {
+  id: string;
+  number: string;
+  lodge: Lodge;
+  type: string;
+  status: RoomStatus;
+};
+
+type LinenType = "Single bed sets" | "Double bed sets" | "Small white T/cloths" | "Towels";
+
+type LinenCount = {
+  type: LinenType;
+  clean: number;
+  dirty: number;
+  parStock: number;
+};
+
+type ChemicalUnit = "ltrs" | "kg" | "units";
+
+type ChemicalStockItem = {
+  name: string;
+  quantity: number;
+  unit: ChemicalUnit;
+  reorderLevel: number;
+};
+
+type AmenityStockItem = {
+  name: string;
+  quantity: number;
+  reorderLevel: number;
+};
+
+type RoomStatusSnapshot = {
+  room: string;
+  lodge: Lodge;
+  status: RoomStatus;
+  notes?: string;
+};
+
+type HousekeepingChecklist = {
+  id: string;
+  date: string;
+  submittedBy: string;
+  submittedAt: string;
+  linen: LinenCount[];
+  chemicals: ChemicalStockItem[];
+  amenities: AmenityStockItem[];
+  roomStatuses: RoomStatusSnapshot[];
+  notes?: string;
+};
+
+type HousekeepingChecklistFormValues = {
+  date: string;
+  submittedBy: string;
+  linen: LinenCount[];
+  chemicals: ChemicalStockItem[];
+  amenities: AmenityStockItem[];
+  roomStatuses: RoomStatusSnapshot[];
+  notes?: string;
+};
+
+type StockAlert = {
+  kind: "chemical" | "amenity" | "linen";
+  item: string;
+  message: string;
+  severity: "warning" | "danger";
+};
+
+type Reservation = {
+  id: string;
+  guest: string;
+  organisation: string;
+  phone?: string;
+  email?: string;
+  room: string;
+  arrival: string;
+  departure: string;
+  guests: number;
+  status: ReservationStatus;
+  payment: PaymentStatus;
+  balance: number;
+  purpose: "Accommodation" | "Conference Group" | "Activities";
+  rate?: number;
+  notes?: string;
+  idNumber?: string;
+  vehicle?: string;
+};
+
+type ReservationFormValues = {
+  guest: string;
+  organisation: string;
+  phone: string;
+  email: string;
+  room: string;
+  arrival: string;
+  departure: string;
+  guests: number;
+  purpose: Reservation["purpose"];
+  rate: number;
+  depositAmount: number;
+  paymentMethod: PaymentMethod;
+  notes: string;
+};
+
+type HousekeepingTask = {
+  id: string;
+  room: string;
+  assignedTo: string;
+  status: "Queued" | "Cleaning" | "Inspection" | "Available";
+  priority: "Normal" | "High";
+};
+
+type PosOrder = {
+  id: string;
+  table: string;
+  waiter: string;
+  guest: string;
+  items: string[];
+  total: number;
+  payment: "Cash" | "Card" | "Room Charge";
+  kitchenStatus: KitchenStatus;
+};
+
+type PurchaseRequest = {
+  id: string;
+  department: string;
+  supplier: string;
+  description: string;
+  amount: number;
+  status: ApprovalStatus;
+};
+
+type ActivityBooking = {
+  id: string;
+  activity: string;
+  guest: string;
+  time: string;
+  instructor: string;
+  status: "Booked" | "In Progress" | "Closed";
+};
+
+type Enquiry = {
+  id: string;
+  source: "Telephone" | "WhatsApp" | "Email" | "Walk-in";
+  guest: string;
+  request: string;
+  arrival: string;
+  status: "New" | "Quoted" | "Follow-up" | "Confirmed" | "Lost";
+  nextStep: string;
+};
+
+type ManualTask = {
+  id: string;
+  area: string;
+  item: string;
+  owner: string;
+  status: "Pending" | "Done" | "Needs Attention";
+};
+
+type GuestMessage = {
+  id: string;
+  guest: string;
+  room: string;
+  caller: string;
+  message: string;
+  status: "Held for Arrival" | "Placed in Key Box" | "Delivered";
+};
+
+type KeyLog = {
+  id: string;
+  room: string;
+  action: "Issued" | "Returned" | "Spare Key Released" | "Missing Report";
+  reason: string;
+  staff: string;
+};
+
+type Complaint = {
+  id: string;
+  department: "Restaurant" | "Activities" | "Front Office";
+  guest: string;
+  issue: string;
+  status: "Logged" | "Manager Review" | "Resolved";
+};
+
+type SafetyRecord = {
+  id: string;
+  activity: string;
+  check: string;
+  status: "Passed" | "Blocked" | "Report Required";
+  owner: string;
+};
+
+type CashControl = {
+  id: string;
+  area: string;
+  expected: number;
+  counted: number;
+  status: "Balanced" | "Variance" | "Pending";
+};
+
+type ReportRun = {
+  id: string;
+  report: string;
+  schedule: string;
+  status: "Ready" | "Printed" | "PDF Saved";
+};
+
+type AuditItem = {
+  id: string;
+  text: string;
+  user: string;
+  time: string;
+};
+
+type ReceiptPurpose = "Deposit" | "Balance Payment" | "Full Settlement";
+
+type Receipt = {
+  id: string;
+  reservationId: string;
+  guest: string;
+  amount: number;
+  method: PaymentMethod;
+  purpose: ReceiptPurpose;
+  balanceAfter: number;
+  issuedBy: string;
+  time: string;
+};
+
+type DemoState = {
+  rooms: Room[];
+  reservations: Reservation[];
+  housekeeping: HousekeepingTask[];
+  orders: PosOrder[];
+  purchaseRequests: PurchaseRequest[];
+  activities: ActivityBooking[];
+  enquiries: Enquiry[];
+  manualTasks: ManualTask[];
+  messages: GuestMessage[];
+  keyLogs: KeyLog[];
+  complaints: Complaint[];
+  safetyRecords: SafetyRecord[];
+  cashControls: CashControl[];
+  reports: ReportRun[];
+  receipts: Receipt[];
+  audit: AuditItem[];
+  housekeepingChecklists: HousekeepingChecklist[];
+};
+
+const storageKey = "blue-hills-erp-demo-v2";
+
+const LODGE_ORDER: Lodge[] = ["Zebra", "Kudu", "Impala", "Dormitory"];
+
+const LINEN_TYPES: LinenType[] = ["Single bed sets", "Double bed sets", "Small white T/cloths", "Towels"];
+
+const LINEN_PAR_STOCK: Record<LinenType, number> = {
+  "Single bed sets": 50,
+  "Double bed sets": 20,
+  "Small white T/cloths": 30,
+  Towels: 25,
+};
+
+const CHEMICAL_CATALOG: Array<{ name: string; unit: ChemicalUnit; reorderLevel: number }> = [
+  { name: "Dishwasher", unit: "ltrs", reorderLevel: 10 },
+  { name: "Degreaser", unit: "ltrs", reorderLevel: 10 },
+  { name: "Multi clean", unit: "ltrs", reorderLevel: 5 },
+  { name: "Bluefresh", unit: "ltrs", reorderLevel: 10 },
+  { name: "Hand Andy", unit: "ltrs", reorderLevel: 5 },
+  { name: "Imperial mint", unit: "ltrs", reorderLevel: 5 },
+  { name: "Tissue paper", unit: "units", reorderLevel: 20 },
+  { name: "Pinegel", unit: "kg", reorderLevel: 5 },
+  { name: "Window cleaner", unit: "ltrs", reorderLevel: 5 },
+  { name: "Bleach", unit: "ltrs", reorderLevel: 5 },
+  { name: "Small binliners", unit: "units", reorderLevel: 10 },
+  { name: "Handy wash", unit: "units", reorderLevel: 5 },
+  { name: "Binliners", unit: "units", reorderLevel: 30 },
+  { name: "Vim", unit: "kg", reorderLevel: 2 },
+];
+
+const AMENITY_CATALOG: Array<{ name: string; reorderLevel: number }> = [
+  { name: "Body lotion", reorderLevel: 10 },
+  { name: "Shower gel", reorderLevel: 10 },
+  { name: "Soaps", reorderLevel: 20 },
+  { name: "White sugar sachets", reorderLevel: 50 },
+  { name: "Brown sugar sachets", reorderLevel: 20 },
+];
+
+const money = new Intl.NumberFormat("en-ZW", {
+  style: "currency",
+  currency: "USD",
+});
+
+function nowTime() {
+  return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+const navigation: Array<{ id: ModuleId; label: string; icon: LucideIcon }> = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "frontOffice", label: "Front Office", icon: Hotel },
+  { id: "restaurant", label: "Restaurant & Kitchen", icon: Utensils },
+  { id: "operations", label: "Housekeeping & Activities", icon: BedDouble },
+  { id: "procurement", label: "Procurement & Stores", icon: Warehouse },
+  { id: "finance", label: "Finance & Night Audit", icon: CreditCard },
+];
+
+const dates = ["Jul 02", "Jul 03", "Jul 04", "Jul 05", "Jul 06", "Jul 07"];
+const businessDateLabel = dates[0];
+const businessDateIso = "2026-07-02";
+const tomorrowDateLabel = dates[1];
+
+type RoomStatusSummary = {
+  occupied: number;
+  available: number;
+  dirty: number;
+  staff: number;
+  maintenance: number;
+  byLodge: Record<Lodge, { occupied: number; available: number; dirty: number; staff: number; maintenance: number }>;
+};
+
+type DashboardMetrics = {
+  inHouseGuests: Reservation[];
+  arrivalsToday: Reservation[];
+  departuresToday: Reservation[];
+  readyRooms: number;
+  dirtyRooms: number;
+  hkQueueCount: number;
+  latestChecklist?: HousekeepingChecklist;
+  checklistSubmittedToday: boolean;
+  roomSummary: RoomStatusSummary;
+  newEnquiries: number;
+  pendingMessages: number;
+  pendingPurchases: number;
+  newKitchenOrders: number;
+  activeActivities: number;
+};
+
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function createDefaultLinen(): LinenCount[] {
+  return LINEN_TYPES.map((type) => ({
+    type,
+    clean: 0,
+    dirty: 0,
+    parStock: LINEN_PAR_STOCK[type],
+  }));
+}
+
+function createDefaultChemicals(): ChemicalStockItem[] {
+  return CHEMICAL_CATALOG.map((item) => ({
+    name: item.name,
+    quantity: 0,
+    unit: item.unit,
+    reorderLevel: item.reorderLevel,
+  }));
+}
+
+function createDefaultAmenities(): AmenityStockItem[] {
+  return AMENITY_CATALOG.map((item) => ({
+    name: item.name,
+    quantity: 0,
+    reorderLevel: item.reorderLevel,
+  }));
+}
+
+function createSeedRooms(): Room[] {
+  const rooms: Room[] = [];
+  for (let i = 1; i <= 8; i += 1) {
+    let status: RoomStatus = "Available";
+    if (i === 1 || i === 2) status = "Occupied";
+    if (i === 6) status = "Staff";
+    rooms.push({ id: `z${i}`, number: `Zebra ${i}`, lodge: "Zebra", type: "Chalet", status });
+  }
+  for (let i = 1; i <= 6; i += 1) {
+    let status: RoomStatus = "Dirty";
+    if (i === 6) status = "Available";
+    rooms.push({ id: `k${i}`, number: `Kudu ${i}`, lodge: "Kudu", type: "Chalet", status });
+  }
+  for (let i = 1; i <= 2; i += 1) {
+    rooms.push({
+      id: `i${i}`,
+      number: `Impala ${i}`,
+      lodge: "Impala",
+      type: "Chalet",
+      status: i === 1 ? "Occupied" : "Dirty",
+    });
+  }
+  rooms.push({
+    id: "d1",
+    number: "Ladies Dormitory",
+    lodge: "Dormitory",
+    type: "Dormitory",
+    status: "Dirty",
+  });
+  return rooms;
+}
+
+function createRoomStatusesFromRooms(rooms: Room[]): RoomStatusSnapshot[] {
+  return rooms.map((room) => ({
+    room: room.number,
+    lodge: room.lodge,
+    status: room.status,
+  }));
+}
+
+function createSeedChecklist(): HousekeepingChecklist {
+  return {
+    id: "HKC-300626",
+    date: "2026-06-30",
+    submittedBy: "Memory",
+    submittedAt: "08:15",
+    linen: [
+      { type: "Single bed sets", clean: 36, dirty: 11, parStock: 50 },
+      { type: "Double bed sets", clean: 9, dirty: 5, parStock: 20 },
+      { type: "Small white T/cloths", clean: 0, dirty: 23, parStock: 30 },
+      { type: "Towels", clean: 9, dirty: 5, parStock: 25 },
+    ],
+    chemicals: [
+      { name: "Dishwasher", quantity: 30, unit: "ltrs", reorderLevel: 10 },
+      { name: "Degreaser", quantity: 23, unit: "ltrs", reorderLevel: 10 },
+      { name: "Multi clean", quantity: 11, unit: "ltrs", reorderLevel: 5 },
+      { name: "Bluefresh", quantity: 27, unit: "ltrs", reorderLevel: 10 },
+      { name: "Hand Andy", quantity: 16, unit: "ltrs", reorderLevel: 5 },
+      { name: "Imperial mint", quantity: 19, unit: "ltrs", reorderLevel: 5 },
+      { name: "Tissue paper", quantity: 38, unit: "units", reorderLevel: 20 },
+      { name: "Pinegel", quantity: 18, unit: "kg", reorderLevel: 5 },
+      { name: "Window cleaner", quantity: 13, unit: "ltrs", reorderLevel: 5 },
+      { name: "Bleach", quantity: 13, unit: "ltrs", reorderLevel: 5 },
+      { name: "Small binliners", quantity: 8, unit: "units", reorderLevel: 10 },
+      { name: "Handy wash", quantity: 10, unit: "units", reorderLevel: 5 },
+      { name: "Binliners", quantity: 80, unit: "units", reorderLevel: 30 },
+      { name: "Vim", quantity: 0, unit: "kg", reorderLevel: 2 },
+    ],
+    amenities: [
+      { name: "Body lotion", quantity: 0, reorderLevel: 10 },
+      { name: "Shower gel", quantity: 0, reorderLevel: 10 },
+      { name: "Soaps", quantity: 74, reorderLevel: 20 },
+      { name: "White sugar sachets", quantity: 165, reorderLevel: 50 },
+      { name: "Brown sugar sachets", quantity: 10, reorderLevel: 20 },
+    ],
+    roomStatuses: [
+      { room: "Zebra 1", lodge: "Zebra", status: "Occupied" },
+      { room: "Zebra 2", lodge: "Zebra", status: "Occupied" },
+      { room: "Zebra 3", lodge: "Zebra", status: "Available" },
+      { room: "Zebra 4", lodge: "Zebra", status: "Available" },
+      { room: "Zebra 5", lodge: "Zebra", status: "Available" },
+      { room: "Zebra 6", lodge: "Zebra", status: "Staff", notes: "Ladies staff room" },
+      { room: "Zebra 7", lodge: "Zebra", status: "Available" },
+      { room: "Zebra 8", lodge: "Zebra", status: "Available" },
+      { room: "Kudu 1", lodge: "Kudu", status: "Dirty" },
+      { room: "Kudu 2", lodge: "Kudu", status: "Dirty" },
+      { room: "Kudu 3", lodge: "Kudu", status: "Dirty" },
+      { room: "Kudu 4", lodge: "Kudu", status: "Dirty" },
+      { room: "Kudu 5", lodge: "Kudu", status: "Dirty" },
+      { room: "Kudu 6", lodge: "Kudu", status: "Available" },
+      { room: "Impala 1", lodge: "Impala", status: "Available" },
+      { room: "Impala 2", lodge: "Impala", status: "Dirty" },
+      { room: "Ladies Dormitory", lodge: "Dormitory", status: "Dirty" },
+    ],
+  };
+}
+
+function computeStockAlerts(checklist: HousekeepingChecklist | undefined): StockAlert[] {
+  if (!checklist) return [];
+
+  const alerts: StockAlert[] = [];
+
+  checklist.linen.forEach((item) => {
+    if (item.clean === 0) {
+      alerts.push({
+        kind: "linen",
+        item: item.type,
+        message: `${item.type}: 0 clean available (${item.dirty} dirty)`,
+        severity: "danger",
+      });
+    } else if (item.clean + item.dirty !== item.parStock) {
+      alerts.push({
+        kind: "linen",
+        item: item.type,
+        message: `${item.type}: clean + dirty (${item.clean + item.dirty}) does not match par stock (${item.parStock})`,
+        severity: "warning",
+      });
+    }
+  });
+
+  checklist.chemicals.forEach((item) => {
+    if (item.quantity <= item.reorderLevel) {
+      alerts.push({
+        kind: "chemical",
+        item: item.name,
+        message: `${item.name}: ${item.quantity}${item.unit} at or below reorder level (${item.reorderLevel}${item.unit})`,
+        severity: item.quantity === 0 ? "danger" : "warning",
+      });
+    }
+  });
+
+  checklist.amenities.forEach((item) => {
+    if (item.quantity <= item.reorderLevel) {
+      alerts.push({
+        kind: "amenity",
+        item: item.name,
+        message: `${item.name}: ${item.quantity} units at or below reorder level (${item.reorderLevel})`,
+        severity: item.quantity === 0 ? "danger" : "warning",
+      });
+    }
+  });
+
+  return alerts;
+}
+
+function getLatestChecklist(checklists: HousekeepingChecklist[]) {
+  return [...checklists].sort((a, b) => b.date.localeCompare(a.date))[0];
+}
+
+function summarizeRoomStatuses(rooms: Room[]): RoomStatusSummary {
+  const byLodge = LODGE_ORDER.reduce(
+    (accumulator, lodge) => ({
+      ...accumulator,
+      [lodge]: { occupied: 0, available: 0, dirty: 0, staff: 0, maintenance: 0 },
+    }),
+    {} as RoomStatusSummary["byLodge"],
+  );
+
+  const summary: RoomStatusSummary = {
+    occupied: 0,
+    available: 0,
+    dirty: 0,
+    staff: 0,
+    maintenance: 0,
+    byLodge,
+  };
+
+  rooms.forEach((room) => {
+    if (room.status === "Occupied") summary.occupied += 1;
+    if (room.status === "Available") summary.available += 1;
+    if (room.status === "Dirty") summary.dirty += 1;
+    if (room.status === "Staff") summary.staff += 1;
+    if (room.status === "Maintenance") summary.maintenance += 1;
+
+    const lodgeSummary = summary.byLodge[room.lodge];
+    if (room.status === "Occupied") lodgeSummary.occupied += 1;
+    if (room.status === "Available") lodgeSummary.available += 1;
+    if (room.status === "Dirty") lodgeSummary.dirty += 1;
+    if (room.status === "Staff") lodgeSummary.staff += 1;
+    if (room.status === "Maintenance") lodgeSummary.maintenance += 1;
+  });
+
+  return summary;
+}
+
+function buildDashboardMetrics(state: DemoState): DashboardMetrics {
+  const latestChecklist = getLatestChecklist(state.housekeepingChecklists);
+  const roomSummary = summarizeRoomStatuses(state.rooms);
+
+  return {
+    inHouseGuests: state.reservations.filter((reservation) => reservation.status === "Checked In"),
+    arrivalsToday: state.reservations.filter(
+      (reservation) => reservation.arrival === businessDateLabel && reservation.status !== "Checked In" && reservation.status !== "Cancelled",
+    ),
+    departuresToday: state.reservations.filter(
+      (reservation) => reservation.departure === businessDateLabel && reservation.status === "Checked In",
+    ),
+    readyRooms: roomSummary.available,
+    dirtyRooms: roomSummary.dirty,
+    hkQueueCount: state.housekeeping.filter((task) => task.status !== "Available").length,
+    latestChecklist,
+    checklistSubmittedToday: state.housekeepingChecklists.some((checklist) => checklist.date === businessDateIso),
+    roomSummary,
+    newEnquiries: state.enquiries.filter((enquiry) => enquiry.status === "New").length,
+    pendingMessages: state.messages.filter((message) => message.status !== "Delivered").length,
+    pendingPurchases: state.purchaseRequests.filter((request) => request.status === "Awaiting Approval").length,
+    newKitchenOrders: state.orders.filter((order) => order.kitchenStatus === "New").length,
+    activeActivities: state.activities.filter((booking) => booking.status === "In Progress").length,
+  };
+}
+
+function formatChecklistDateLabel(date: string) {
+  const [year, month, day] = date.split("-");
+  return `${day}/${month}/${year.slice(2)}`;
+}
+
+function roomStatusWhatsAppLabel(status: RoomStatus) {
+  if (status === "Available") return "vacant";
+  if (status === "Occupied") return "occupied";
+  if (status === "Dirty") return "checkout";
+  if (status === "Staff") return "staff";
+  return status.toLowerCase();
+}
+
+function formatChecklistAsWhatsApp(checklist: HousekeepingChecklist) {
+  const lines: string[] = [
+    "Good morning",
+    "HOUSEKEEPING CHECKLIST",
+    `*${formatChecklistDateLabel(checklist.date)}*`,
+    "",
+    "*CLEAN LINEN* *AVAILABLE*",
+    ...checklist.linen.map((item) => `${item.type} x ${item.clean}`),
+    "",
+    "*Dirty* *linen*",
+    ...checklist.linen.map((item) => `${item.type} x ${item.dirty}`),
+    "",
+    "*Chemical* **checklist*",
+    ...checklist.chemicals.map((item) => `${item.name} x${item.quantity}${item.unit}`),
+    "",
+    "*Guest*Amenities",
+    ...checklist.amenities.map((item) => `${item.name} x ${item.quantity}`),
+    "",
+    "*Rooms*occupancy*",
+    "",
+    ...checklist.roomStatuses.map((snapshot) => {
+      const note = snapshot.notes ? ` (${snapshot.notes})` : "";
+      return `${snapshot.room}- ${roomStatusWhatsAppLabel(snapshot.status)}${note}`;
+    }),
+  ];
+
+  if (checklist.notes) {
+    lines.push("", `Notes: ${checklist.notes}`);
+  }
+
+  return lines.join("\n");
+}
+
+function createSeedState(): DemoState {
+  const rooms = createSeedRooms();
+  return {
+    rooms,
+    reservations: [
+      {
+        id: "RSV-1042",
+        guest: "Tariro Moyo",
+        organisation: "Moyo Family",
+        phone: "+263 77 123 4567",
+        email: "tariro.moyo@example.com",
+        room: "Zebra 1",
+        arrival: "Jul 02",
+        departure: "Jul 05",
+        guests: 4,
+        status: "Checked In",
+        payment: "Paid",
+        balance: 0,
+        purpose: "Accommodation",
+        rate: 110,
+        idNumber: "63-112233A45",
+        vehicle: "AEK 4521",
+      },
+      {
+        id: "RSV-1043",
+        guest: "Blessing Ncube",
+        organisation: "Ncube Holdings",
+        phone: "+263 71 555 9090",
+        email: "blessing@ncubeholdings.co.zw",
+        room: "Zebra 3",
+        arrival: "Jul 03",
+        departure: "Jul 06",
+        guests: 2,
+        status: "Guaranteed",
+        payment: "Deposit Paid",
+        balance: 180,
+        purpose: "Accommodation",
+        rate: 110,
+      },
+      {
+        id: "RSV-1044",
+        guest: "Sarah Davies",
+        organisation: "Harare School Camp",
+        phone: "+263 78 222 3344",
+        email: "bookings@harareschoolcamp.co.zw",
+        room: "Impala 1",
+        arrival: "Jul 02",
+        departure: "Jul 07",
+        guests: 28,
+        status: "Confirmed",
+        payment: "Outstanding",
+        balance: 1260,
+        purpose: "Conference Group",
+        rate: 45,
+      },
+    ],
+    housekeeping: [
+      { id: "HK-88", room: "Kudu 2", assignedTo: "Memory", status: "Queued", priority: "High" },
+      { id: "HK-89", room: "Impala 2", assignedTo: "Unassigned", status: "Queued", priority: "Normal" },
+    ],
+    orders: [
+      {
+        id: "KOT-221",
+        table: "Table 4",
+        waiter: "Lynette",
+        guest: "Tariro Moyo",
+        items: ["2 Chicken Burgers", "1 Greek Salad", "3 Mazoe Orange"],
+        total: 48,
+        payment: "Room Charge",
+        kitchenStatus: "Preparing",
+      },
+      {
+        id: "KOT-222",
+        table: "Bar Counter",
+        waiter: "Farai",
+        guest: "Walk-in",
+        items: ["2 Beef Skewers", "2 Castle Lite"],
+        total: 31,
+        payment: "Cash",
+        kitchenStatus: "New",
+      },
+    ],
+    purchaseRequests: [
+      {
+        id: "PR-318",
+        department: "Kitchen",
+        supplier: "Mutare Fresh Foods",
+        description: "Vegetables, chicken, and breakfast stock",
+        amount: 620,
+        status: "Awaiting Approval",
+      },
+      {
+        id: "PR-319",
+        department: "Maintenance",
+        supplier: "Rusape Hardware",
+        description: "Pool pump fittings and Kudu lodge repairs",
+        amount: 245,
+        status: "Approved",
+      },
+    ],
+    activities: [
+      {
+        id: "ACT-514",
+        activity: "Quad Bike Trail",
+        guest: "Ncube Holdings",
+        time: "10:30",
+        instructor: "Tawanda",
+        status: "Booked",
+      },
+      {
+        id: "ACT-515",
+        activity: "Paintball",
+        guest: "Harare School Camp",
+        time: "14:00",
+        instructor: "Chipo",
+        status: "In Progress",
+      },
+    ],
+    enquiries: [
+      {
+        id: "ENQ-742",
+        source: "WhatsApp",
+        guest: "Amai Sibanda",
+        request: "Family chalet, dinner, zipline for 6 guests",
+        arrival: "Jul 12",
+        status: "Follow-up",
+        nextStep: "Call back after quotation review",
+      },
+      {
+        id: "ENQ-743",
+        source: "Email",
+        guest: "Bulawayo Training Institute",
+        request: "Conference, lunch, tea breaks, 18 rooms",
+        arrival: "Jul 18",
+        status: "Quoted",
+        nextStep: "Await purchase order confirmation",
+      },
+      {
+        id: "ENQ-744",
+        source: "Walk-in",
+        guest: "David Moyo",
+        request: "One night walk-in, king leisure bed",
+        arrival: "Jul 02",
+        status: "New",
+        nextStep: "Check vacant clean room or waitlist",
+      },
+    ],
+    manualTasks: [
+      { id: "MT-1", area: "Zebra 3", item: "Registration card printed and signed", owner: "Reception", status: "Pending" },
+      { id: "MT-2", area: "Conference Hall", item: "Projector, flip chart, diesel, water and folders checked", owner: "Front Office", status: "Needs Attention" },
+      { id: "MT-3", area: "Restaurant", item: "Opening checklist: menus, cutlery, glassware, tables", owner: "Head Waiter", status: "Done" },
+      { id: "MT-4", area: "Kitchen", item: "Fridge temperatures, gas, bins and pest control log", owner: "Chef", status: "Pending" },
+      { id: "MT-5", area: "Kudu 2", item: "Towels, soap, shower drainage, lights and verandah checked", owner: "Housekeeping", status: "Needs Attention" },
+      { id: "MT-6", area: "Quad Bikes", item: "Tyres, brakes, steering, fuel, oil and tool kit checked", owner: "Instructor", status: "Pending" },
+    ],
+    messages: [
+      {
+        id: "MSG-91",
+        guest: "Blessing Ncube",
+        room: "Zebra 3",
+        caller: "Ncube Holdings Accounts",
+        message: "Bank transfer proof will be sent before 16:00.",
+        status: "Held for Arrival",
+      },
+      {
+        id: "MSG-92",
+        guest: "Tariro Moyo",
+        room: "Zebra 1",
+        caller: "Sarah Moyo",
+        message: "Please call back about tomorrow's activity booking.",
+        status: "Placed in Key Box",
+      },
+    ],
+    keyLogs: [
+      { id: "KEY-44", room: "Zebra 1", action: "Issued", reason: "Guest check-in", staff: "Reception" },
+      { id: "KEY-45", room: "Zebra 6", action: "Spare Key Released", reason: "Staff room inspection", staff: "Supervisor" },
+      { id: "KEY-46", room: "Kudu 2", action: "Missing Report", reason: "Key not returned after checkout", staff: "Reception" },
+    ],
+    complaints: [
+      {
+        id: "CMP-18",
+        department: "Restaurant",
+        guest: "Tariro Moyo",
+        issue: "Breakfast service delayed by 12 minutes.",
+        status: "Manager Review",
+      },
+      {
+        id: "CMP-19",
+        department: "Activities",
+        guest: "Harare School Camp",
+        issue: "Paintball queue order disputed by participant.",
+        status: "Logged",
+      },
+    ],
+    safetyRecords: [
+      { id: "SAFE-1", activity: "Zipline", check: "Harnesses, helmets, pulley, sling lines and weather", status: "Passed", owner: "Chipo" },
+      { id: "SAFE-2", activity: "Quad Bike", check: "Brake fault found on Quad 03", status: "Blocked", owner: "Tawanda" },
+      { id: "SAFE-3", activity: "Paintball", check: "Masks counted, damaged overalls tagged", status: "Report Required", owner: "Nyasha" },
+    ],
+    cashControls: [
+      { id: "CASH-1", area: "Front Office Float", expected: 200, counted: 200, status: "Balanced" },
+      { id: "CASH-2", area: "Restaurant Cash Drop", expected: 410, counted: 395, status: "Variance" },
+      { id: "CASH-3", area: "Bar Register", expected: 285, counted: 0, status: "Pending" },
+    ],
+    reports: [
+      { id: "REP-1", report: "In-house guests by room", schedule: "10:00, 13:00, 17:00, 22:00", status: "Printed" },
+      { id: "REP-2", report: "Remaining arrivals and departures", schedule: "Night audit", status: "Ready" },
+      { id: "REP-3", report: "Guest balance detailed report", schedule: "Night audit", status: "PDF Saved" },
+      { id: "REP-4", report: "Housekeepers room status list", schedule: "Every shift", status: "Ready" },
+    ],
+    receipts: [
+      {
+        id: "RCT-1001",
+        reservationId: "RSV-1042",
+        guest: "Tariro Moyo",
+        amount: 330,
+        method: "Cash",
+        purpose: "Full Settlement",
+        balanceAfter: 0,
+        issuedBy: "Reception",
+        time: "09:05",
+      },
+      {
+        id: "RCT-1002",
+        reservationId: "RSV-1043",
+        guest: "Blessing Ncube",
+        amount: 150,
+        method: "Bank Transfer",
+        purpose: "Deposit",
+        balanceAfter: 180,
+        issuedBy: "Reception",
+        time: "08:40",
+      },
+    ],
+    audit: [
+      { id: "A1", text: "Reservation RSV-1042 checked in", user: "Reception", time: "09:10" },
+      { id: "A2", text: "Kitchen accepted KOT-221", user: "Chef", time: "09:18" },
+      { id: "A3", text: "Room Kudu 2 added to housekeeping queue", user: "System", time: "09:22" },
+      { id: "A4", text: "Purchase request PR-318 awaiting manager approval", user: "Stores", time: "09:30" },
+    ],
+    housekeepingChecklists: [createSeedChecklist()],
+  };
+}
+
+function useLocalDemoState() {
+  const [state, setState] = useState<DemoState>(() => {
+    const stored = window.localStorage.getItem(storageKey);
+
+    if (!stored) {
+      const seed = createSeedState();
+      window.localStorage.setItem(storageKey, JSON.stringify(seed));
+      return seed;
+    }
+
+    try {
+      return { ...createSeedState(), ...(JSON.parse(stored) as Partial<DemoState>) };
+    } catch {
+      return createSeedState();
+    }
+  });
+
+  const save = (next: DemoState) => {
+    setState(next);
+    window.localStorage.setItem(storageKey, JSON.stringify(next));
+  };
+
+  const withAudit = (next: DemoState, text: string, user = "Demo User") => {
+    save({
+      ...next,
+      audit: [
+        { id: crypto.randomUUID(), text, user, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) },
+        ...next.audit,
+      ].slice(0, 8),
+    });
+  };
+
+  return { state, save, withAudit };
+}
+
+function App() {
+  const [activeModule, setActiveModule] = useState<ModuleId>("dashboard");
+  const { state, save, withAudit } = useLocalDemoState();
+
+  const totals = useMemo(() => {
+    const occupied = state.rooms.filter((room) => room.status === "Occupied").length;
+    const revenue =
+      state.orders.reduce((sum, order) => sum + order.total, 0) +
+      state.reservations.reduce((sum, reservation) => sum + (reservation.balance === 0 ? 320 : 0), 0);
+    const outstanding = state.reservations.reduce((sum, reservation) => sum + reservation.balance, 0);
+
+    return {
+      occupancy: Math.round((occupied / state.rooms.length) * 100),
+      arrivals: state.reservations.filter((reservation) => reservation.arrival === tomorrowDateLabel).length,
+      revenue,
+      outstanding,
+    };
+  }, [state]);
+
+  const stockAlerts = useMemo(() => computeStockAlerts(getLatestChecklist(state.housekeepingChecklists)), [state.housekeepingChecklists]);
+
+  const dashboardMetrics = useMemo(() => buildDashboardMetrics(state), [state]);
+
+  const resetDemo = () => save(createSeedState());
+
+  const [reservationDrawer, setReservationDrawer] = useState<{ mode: "create" } | { mode: "edit"; id: string } | null>(null);
+  const [reservationPrefill, setReservationPrefill] = useState<{ guest?: string; arrival?: string } | null>(null);
+  const [checkInReservationId, setCheckInReservationId] = useState<string | null>(null);
+  const [checkOutReservationId, setCheckOutReservationId] = useState<string | null>(null);
+  const [enquiryModalOpen, setEnquiryModalOpen] = useState(false);
+  const [keyModalAction, setKeyModalAction] = useState<KeyLog["action"] | null>(null);
+  const [messageModalOpen, setMessageModalOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [receiptPreview, setReceiptPreview] = useState<Receipt | null>(null);
+  const [checklistDrawerOpen, setChecklistDrawerOpen] = useState(false);
+  const [checklistDetail, setChecklistDetail] = useState<HousekeepingChecklist | null>(null);
+
+  const openNewReservation = () => {
+    setReservationPrefill(null);
+    setReservationDrawer({ mode: "create" });
+  };
+
+  const openReservationDrawer = (id: string) => setReservationDrawer({ mode: "edit", id });
+
+  const makeReceipt = (reservation: Reservation, details: { amount: number; method: PaymentMethod; purpose: ReceiptPurpose; balanceAfter: number }): Receipt => ({
+    id: `RCT-${1000 + state.receipts.length + Math.floor(Math.random() * 90)}`,
+    reservationId: reservation.id,
+    guest: reservation.guest,
+    amount: details.amount,
+    method: details.method,
+    purpose: details.purpose,
+    balanceAfter: details.balanceAfter,
+    issuedBy: "Reception",
+    time: nowTime(),
+  });
+
+  const saveReservation = (values: ReservationFormValues, existingId: string | null) => {
+    if (existingId) {
+      withAudit(
+        {
+          ...state,
+          reservations: state.reservations.map((item) =>
+            item.id === existingId
+              ? {
+                  ...item,
+                  guest: values.guest,
+                  organisation: values.organisation,
+                  phone: values.phone || undefined,
+                  email: values.email || undefined,
+                  room: values.room,
+                  arrival: values.arrival,
+                  departure: values.departure,
+                  guests: values.guests,
+                  purpose: values.purpose,
+                  rate: values.rate,
+                  notes: values.notes || undefined,
+                }
+              : item,
+          ),
+        },
+        `${existingId} details updated for ${values.guest}`,
+        "Reception",
+      );
+      setReceiptPreview(null);
+    } else {
+      const id = `RSV-${1000 + state.reservations.length + Math.floor(Math.random() * 50)}`;
+      const nights = Math.max(1, dates.indexOf(values.departure) - dates.indexOf(values.arrival));
+      const balance = Math.max(0, nights * values.rate - values.depositAmount);
+      const newReservation: Reservation = {
+        id,
+        guest: values.guest,
+        organisation: values.organisation,
+        phone: values.phone || undefined,
+        email: values.email || undefined,
+        room: values.room,
+        arrival: values.arrival,
+        departure: values.departure,
+        guests: values.guests,
+        status: "Tentative",
+        payment: values.depositAmount > 0 ? "Deposit Paid" : "Outstanding",
+        balance,
+        purpose: values.purpose,
+        rate: values.rate,
+        notes: values.notes || undefined,
+      };
+      const receipt = values.depositAmount > 0 ? makeReceipt(newReservation, { amount: values.depositAmount, method: values.paymentMethod, purpose: "Deposit", balanceAfter: balance }) : null;
+
+      withAudit(
+        {
+          ...state,
+          reservations: [newReservation, ...state.reservations],
+          receipts: receipt ? [receipt, ...state.receipts] : state.receipts,
+        },
+        `${id} created for ${values.guest} in room ${values.room}${receipt ? `, deposit receipt ${receipt.id} issued` : ""}`,
+        "Reception",
+      );
+      setReceiptPreview(receipt);
+    }
+
+    setReservationDrawer(null);
+    setReservationPrefill(null);
+  };
+
+  const cancelReservation = (id: string) => {
+    withAudit(
+      { ...state, reservations: state.reservations.map((item) => (item.id === id ? { ...item, status: "Cancelled" } : item)) },
+      `${id} cancelled`,
+      "Reception",
+    );
+    setReservationDrawer(null);
+  };
+
+  const extendStay = (id: string, newDeparture: string) => {
+    withAudit(
+      { ...state, reservations: state.reservations.map((item) => (item.id === id ? { ...item, departure: newDeparture } : item)) },
+      `${id} stay extended to depart ${newDeparture}`,
+      "Reception",
+    );
+  };
+
+  const recordPayment = (id: string, details: { amount: number; method: PaymentMethod; purpose: ReceiptPurpose }) => {
+    const reservation = state.reservations.find((item) => item.id === id);
+    if (!reservation || details.amount <= 0) return;
+
+    const amount = Math.min(details.amount, reservation.balance);
+    const balanceAfter = Math.max(0, reservation.balance - amount);
+    const receipt = makeReceipt(reservation, { amount, method: details.method, purpose: details.purpose, balanceAfter });
+
+    withAudit(
+      {
+        ...state,
+        reservations: state.reservations.map((item) =>
+          item.id === id ? { ...item, balance: balanceAfter, payment: balanceAfter === 0 ? "Paid" : "Deposit Paid" } : item,
+        ),
+        receipts: [receipt, ...state.receipts],
+      },
+      `${receipt.id} issued for ${reservation.guest}: ${money.format(amount)} via ${details.method}`,
+      "Reception",
+    );
+    setReservationDrawer(null);
+    setReceiptPreview(receipt);
+  };
+
+  const confirmCheckIn = (id: string, details: { idNumber: string; vehicle: string; paymentMethod: PaymentMethod; amountReceived: number; signed: boolean }) => {
+    const reservation = state.reservations.find((item) => item.id === id);
+    if (!reservation) return;
+
+    const amount = Math.max(0, Math.min(details.amountReceived, reservation.balance));
+    const balanceAfter = reservation.balance - amount;
+    const receipt =
+      amount > 0
+        ? makeReceipt(reservation, {
+            amount,
+            method: details.paymentMethod,
+            purpose: balanceAfter === 0 ? "Full Settlement" : "Balance Payment",
+            balanceAfter,
+          })
+        : null;
+
+    withAudit(
+      {
+        ...state,
+        reservations: state.reservations.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                status: "Checked In",
+                payment: balanceAfter === 0 ? "Paid" : amount > 0 ? "Deposit Paid" : item.payment,
+                balance: balanceAfter,
+                idNumber: details.idNumber,
+                vehicle: details.vehicle,
+              }
+            : item,
+        ),
+        rooms: state.rooms.map((room) => (room.number === reservation.room ? { ...room, status: "Occupied" } : room)),
+        keyLogs: [
+          { id: `KEY-${Math.floor(Math.random() * 900)}`, room: reservation.room, action: "Issued", reason: "Guest check-in", staff: "Reception" },
+          ...state.keyLogs,
+        ],
+        receipts: receipt ? [receipt, ...state.receipts] : state.receipts,
+      },
+      `${id} checked in (ID ${details.idNumber || "n/a"})${receipt ? `, receipt ${receipt.id} issued for ${money.format(amount)}` : ""} and key issued for room ${reservation.room}`,
+      "Reception",
+    );
+    setCheckInReservationId(null);
+    if (receipt) setReceiptPreview(receipt);
+  };
+
+  const confirmCheckOut = (id: string, details: { total: number; paymentMethod: PaymentMethod }) => {
+    const reservation = state.reservations.find((item) => item.id === id);
+    if (!reservation) return;
+
+    const receipt = makeReceipt(reservation, { amount: details.total, method: details.paymentMethod, purpose: "Full Settlement", balanceAfter: 0 });
+
+    withAudit(
+      {
+        ...state,
+        reservations: state.reservations.map((item) => (item.id === id ? { ...item, status: "Checked Out", payment: "Paid", balance: 0 } : item)),
+        rooms: state.rooms.map((room) => (room.number === reservation.room ? { ...room, status: "Dirty" } : room)),
+        housekeeping: [
+          { id: `HK-${Math.floor(Math.random() * 900)}`, room: reservation.room, assignedTo: "Unassigned", status: "Queued", priority: "High" },
+          ...state.housekeeping,
+        ],
+        keyLogs: [
+          { id: `KEY-${Math.floor(Math.random() * 900)}`, room: reservation.room, action: "Returned", reason: "Guest checkout", staff: "Reception" },
+          ...state.keyLogs,
+        ],
+        receipts: [receipt, ...state.receipts],
+      },
+      `${id} checked out, receipt ${receipt.id} for ${money.format(details.total)} settled via ${details.paymentMethod}, housekeeping notified`,
+      "Reception",
+    );
+    setCheckOutReservationId(null);
+    setReceiptPreview(receipt);
+  };
+
+  const createEnquiry = (values: { source: Enquiry["source"]; guest: string; request: string; arrival: string; nextStep: string }) => {
+    const id = `ENQ-${700 + state.enquiries.length + Math.floor(Math.random() * 90)}`;
+    withAudit(
+      { ...state, enquiries: [{ id, ...values, status: "New" }, ...state.enquiries] },
+      `${id} logged for ${values.guest} via ${values.source}`,
+      "Reception",
+    );
+    setEnquiryModalOpen(false);
+  };
+
+  const quoteEnquiry = (id: string) => {
+    const enquiry = state.enquiries.find((item) => item.id === id);
+    if (!enquiry) return;
+
+    withAudit(
+      { ...state, enquiries: state.enquiries.map((item) => (item.id === id ? { ...item, status: "Quoted" } : item)) },
+      `${id} quotation generated for ${enquiry.guest}`,
+      "Reception",
+    );
+  };
+
+  const loseEnquiry = (id: string) => {
+    withAudit(
+      { ...state, enquiries: state.enquiries.map((item) => (item.id === id ? { ...item, status: "Lost" } : item)) },
+      `${id} marked as lost`,
+      "Reception",
+    );
+  };
+
+  const convertEnquiry = (id: string) => {
+    const enquiry = state.enquiries.find((item) => item.id === id);
+    if (!enquiry) return;
+
+    withAudit(
+      { ...state, enquiries: state.enquiries.map((item) => (item.id === id ? { ...item, status: "Confirmed" } : item)) },
+      `${id} converted to a new reservation`,
+      "Reception",
+    );
+    setReservationPrefill({ guest: enquiry.guest, arrival: enquiry.arrival });
+    setReservationDrawer({ mode: "create" });
+  };
+
+  const confirmKeyLog = (action: KeyLog["action"], details: { room: string; reason: string; staff: string }) => {
+    const id = `KEY-${Math.floor(Math.random() * 900)}`;
+    withAudit(
+      { ...state, keyLogs: [{ id, room: details.room, action, reason: details.reason, staff: details.staff }, ...state.keyLogs] },
+      `${action} for room ${details.room}: ${details.reason}`,
+      details.staff,
+    );
+    setKeyModalAction(null);
+  };
+
+  const createMessage = (values: { guest: string; room: string; caller: string; message: string; status: GuestMessage["status"] }) => {
+    const id = `MSG-${90 + state.messages.length + Math.floor(Math.random() * 20)}`;
+    withAudit(
+      { ...state, messages: [{ id, ...values }, ...state.messages] },
+      `${id} logged for ${values.guest}`,
+      "Reception",
+    );
+    setMessageModalOpen(false);
+  };
+
+  const markMessageDelivered = (id: string) => {
+    withAudit(
+      { ...state, messages: state.messages.map((item) => (item.id === id ? { ...item, status: "Delivered" } : item)) },
+      `${id} delivered to guest`,
+      "Reception",
+    );
+  };
+
+  const advanceKitchen = (id: string) => {
+    const order = state.orders.find((item) => item.id === id);
+    if (!order) return;
+
+    const nextStatus: Record<KitchenStatus, KitchenStatus> = {
+      New: "Preparing",
+      Preparing: "Ready",
+      Ready: "Completed",
+      Completed: "Completed",
+    };
+
+    withAudit(
+      {
+        ...state,
+        orders: state.orders.map((item) => (item.id === id ? { ...item, kitchenStatus: nextStatus[item.kitchenStatus] } : item)),
+      },
+      `${id} moved to ${nextStatus[order.kitchenStatus]}`,
+      "Kitchen",
+    );
+  };
+
+  const completeHousekeeping = (id: string) => {
+    const task = state.housekeeping.find((item) => item.id === id);
+    if (!task) return;
+
+    withAudit(
+      {
+        ...state,
+        housekeeping: state.housekeeping.map((item) => (item.id === id ? { ...item, status: "Available" } : item)),
+        rooms: state.rooms.map((room) => (room.number === task.room ? { ...room, status: "Available" } : room)),
+      },
+      `${task.room} passed inspection and is available`,
+      "Housekeeping",
+    );
+  };
+
+  const saveHousekeepingChecklist = (values: HousekeepingChecklistFormValues) => {
+    const id = `HKC-${Date.now().toString().slice(-6)}`;
+    const checklist: HousekeepingChecklist = {
+      id,
+      date: values.date,
+      submittedBy: values.submittedBy,
+      submittedAt: nowTime(),
+      linen: values.linen,
+      chemicals: values.chemicals,
+      amenities: values.amenities,
+      roomStatuses: values.roomStatuses,
+      notes: values.notes || undefined,
+    };
+
+    const statusByRoom = new Map(values.roomStatuses.map((snapshot) => [snapshot.room, snapshot.status]));
+
+    withAudit(
+      {
+        ...state,
+        housekeepingChecklists: [checklist, ...state.housekeepingChecklists],
+        rooms: state.rooms.map((room) => ({
+          ...room,
+          status: statusByRoom.get(room.number) ?? room.status,
+        })),
+      },
+      `Daily housekeeping checklist submitted for ${formatChecklistDateLabel(values.date)} by ${values.submittedBy}`,
+      values.submittedBy,
+    );
+    setChecklistDrawerOpen(false);
+  };
+
+  const approvePurchase = (id: string) => {
+    const request = state.purchaseRequests.find((item) => item.id === id);
+    if (!request) return;
+
+    const nextStatus: Record<ApprovalStatus, ApprovalStatus> = {
+      "Awaiting Approval": "Approved",
+      Approved: "Goods Received",
+      "Goods Received": "Goods Received",
+    };
+
+    withAudit(
+      {
+        ...state,
+        purchaseRequests: state.purchaseRequests.map((item) => (item.id === id ? { ...item, status: nextStatus[item.status] } : item)),
+      },
+      `${id} changed to ${nextStatus[request.status]}`,
+      "Manager",
+    );
+  };
+
+  const completeManualTask = (id: string) => {
+    const task = state.manualTasks.find((item) => item.id === id);
+    if (!task) return;
+
+    withAudit(
+      {
+        ...state,
+        manualTasks: state.manualTasks.map((item) => (item.id === id ? { ...item, status: "Done" } : item)),
+      },
+      `${task.area} checklist item completed: ${task.item}`,
+      task.owner,
+    );
+  };
+
+  const advanceComplaint = (id: string) => {
+    const complaint = state.complaints.find((item) => item.id === id);
+    if (!complaint) return;
+
+    const nextStatus: Record<Complaint["status"], Complaint["status"]> = {
+      Logged: "Manager Review",
+      "Manager Review": "Resolved",
+      Resolved: "Resolved",
+    };
+
+    withAudit(
+      {
+        ...state,
+        complaints: state.complaints.map((item) => (item.id === id ? { ...item, status: nextStatus[item.status] } : item)),
+      },
+      `${id} moved to ${nextStatus[complaint.status]}`,
+      complaint.department,
+    );
+  };
+
+  const advanceSafetyRecord = (id: string) => {
+    const record = state.safetyRecords.find((item) => item.id === id);
+    if (!record) return;
+
+    const nextStatus: Record<SafetyRecord["status"], SafetyRecord["status"]> = {
+      Passed: "Passed",
+      Blocked: "Report Required",
+      "Report Required": "Passed",
+    };
+
+    withAudit(
+      {
+        ...state,
+        safetyRecords: state.safetyRecords.map((item) => (item.id === id ? { ...item, status: nextStatus[item.status] } : item)),
+      },
+      `${record.activity} safety record updated to ${nextStatus[record.status]}`,
+      record.owner,
+    );
+  };
+
+  const markReportPrinted = (id: string) => {
+    const report = state.reports.find((item) => item.id === id);
+    if (!report) return;
+
+    withAudit(
+      {
+        ...state,
+        reports: state.reports.map((item) => (item.id === id ? { ...item, status: item.status === "Ready" ? "Printed" : "PDF Saved" } : item)),
+      },
+      `${report.report} generated for department collection`,
+      "Night Audit",
+    );
+  };
+
+  const searchResults = useMemo(
+    () =>
+      buildSearchResults(state, searchTerm, {
+        goTo: setActiveModule,
+        openReservation: openReservationDrawer,
+      }),
+    [state, searchTerm],
+  );
+
+  const activeReservation =
+    reservationDrawer?.mode === "edit" ? state.reservations.find((item) => item.id === reservationDrawer.id) ?? null : null;
+  const checkInTarget = checkInReservationId ? state.reservations.find((item) => item.id === checkInReservationId) ?? null : null;
+  const checkOutTarget = checkOutReservationId ? state.reservations.find((item) => item.id === checkOutReservationId) ?? null : null;
+
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-mark">BH</div>
+          <div>
+            <strong>Blue Hills</strong>
+            <span>Hospitality ERP</span>
+          </div>
+        </div>
+
+        <nav className="nav-list">
+          {navigation.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                className={activeModule === item.id ? "nav-item active" : "nav-item"}
+                key={item.id}
+                onClick={() => setActiveModule(item.id)}
+                type="button"
+              >
+                <Icon size={18} />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="server-card">
+          <ShieldCheck size={18} />
+          <div>
+            <strong>LAN Demo Mode</strong>
+            <span>Local storage active</span>
+          </div>
+        </div>
+      </aside>
+
+      <main className="workspace">
+        <header className="topbar">
+          <div className="global-search">
+            <Search size={18} />
+            <input
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search guests, rooms, invoices, purchase orders..."
+              value={searchTerm}
+            />
+            {searchTerm && (
+              <div className="search-results">
+                {searchResults.length === 0 && <div className="search-empty">No matches found.</div>}
+                {searchResults.map((result) => (
+                  <button
+                    className="search-result"
+                    key={result.key}
+                    onClick={() => {
+                      result.onSelect();
+                      setSearchTerm("");
+                    }}
+                    type="button"
+                  >
+                    <span className="search-kind">{result.kind}</span>
+                    <strong>{result.title}</strong>
+                    <span className="search-sub">{result.subtitle}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="topbar-actions">
+            <button className="ghost-button" type="button">
+              <Bell size={17} />
+              {state.audit.length} Alerts
+            </button>
+            <button className="ghost-button" type="button">
+              <CalendarDays size={17} />
+              Business Date: 02 Jul 2026
+            </button>
+            <button className="primary-button small" onClick={resetDemo} type="button">
+              Reset Demo
+            </button>
+          </div>
+        </header>
+
+        {activeModule === "dashboard" && (
+          <Dashboard state={state} totals={totals} stockAlerts={stockAlerts} metrics={dashboardMetrics} />
+        )}
+        {activeModule === "frontOffice" && (
+          <FrontOffice
+            state={state}
+            onOpenReservation={openReservationDrawer}
+            onOpenNewReservation={openNewReservation}
+            onOpenCheckIn={setCheckInReservationId}
+            onOpenCheckOut={setCheckOutReservationId}
+            onCompleteManualTask={completeManualTask}
+            onOpenNewEnquiry={() => setEnquiryModalOpen(true)}
+            onQuoteEnquiry={quoteEnquiry}
+            onConvertEnquiry={convertEnquiry}
+            onLoseEnquiry={loseEnquiry}
+            onOpenKeyModal={setKeyModalAction}
+            onOpenNewMessage={() => setMessageModalOpen(true)}
+            onMarkMessageDelivered={markMessageDelivered}
+            onViewReceipt={setReceiptPreview}
+          />
+        )}
+        {activeModule === "restaurant" && (
+          <RestaurantKitchen state={state} onAdvanceKitchen={advanceKitchen} onCompleteManualTask={completeManualTask} onAdvanceComplaint={advanceComplaint} />
+        )}
+        {activeModule === "operations" && (
+          <Operations
+            state={state}
+            stockAlerts={stockAlerts}
+            onCompleteHousekeeping={completeHousekeeping}
+            onCompleteManualTask={completeManualTask}
+            onAdvanceSafetyRecord={advanceSafetyRecord}
+            onOpenChecklistDrawer={() => setChecklistDrawerOpen(true)}
+            onOpenChecklistDetail={setChecklistDetail}
+          />
+        )}
+        {activeModule === "procurement" && <Procurement state={state} onApprovePurchase={approvePurchase} />}
+        {activeModule === "finance" && <Finance state={state} totals={totals} onMarkReportPrinted={markReportPrinted} />}
+      </main>
+
+      {reservationDrawer && (
+        <ReservationDrawer
+          onCancelReservation={cancelReservation}
+          onClose={() => {
+            setReservationDrawer(null);
+            setReservationPrefill(null);
+          }}
+          onExtendStay={extendStay}
+          onOpenCheckIn={(id) => {
+            setReservationDrawer(null);
+            setCheckInReservationId(id);
+          }}
+          onOpenCheckOut={(id) => {
+            setReservationDrawer(null);
+            setCheckOutReservationId(id);
+          }}
+          onRecordPayment={recordPayment}
+          onSave={saveReservation}
+          orders={state.orders}
+          prefill={reservationPrefill}
+          reservation={activeReservation}
+          rooms={state.rooms}
+        />
+      )}
+
+      {checkInTarget && <CheckInModal onClose={() => setCheckInReservationId(null)} onConfirm={confirmCheckIn} reservation={checkInTarget} />}
+
+      {checkOutTarget && (
+        <CheckOutDrawer onClose={() => setCheckOutReservationId(null)} onConfirm={confirmCheckOut} orders={state.orders} reservation={checkOutTarget} />
+      )}
+
+      {enquiryModalOpen && <EnquiryModal onClose={() => setEnquiryModalOpen(false)} onCreate={createEnquiry} />}
+
+      {keyModalAction && (
+        <KeyLogModal action={keyModalAction} onClose={() => setKeyModalAction(null)} onConfirm={(details) => confirmKeyLog(keyModalAction, details)} rooms={state.rooms} />
+      )}
+
+      {messageModalOpen && <MessageModal onClose={() => setMessageModalOpen(false)} onCreate={createMessage} />}
+
+      {receiptPreview && <ReceiptModal onClose={() => setReceiptPreview(null)} receipt={receiptPreview} />}
+
+      {checklistDrawerOpen && (
+        <HousekeepingChecklistDrawer
+          rooms={state.rooms}
+          latestChecklist={[...state.housekeepingChecklists].sort((a, b) => b.date.localeCompare(a.date))[0]}
+          onClose={() => setChecklistDrawerOpen(false)}
+          onSave={saveHousekeepingChecklist}
+        />
+      )}
+
+      {checklistDetail && <HousekeepingChecklistDetailModal checklist={checklistDetail} onClose={() => setChecklistDetail(null)} />}
+    </div>
+  );
+}
+
+function Dashboard({
+  state,
+  totals,
+  stockAlerts,
+  metrics,
+}: {
+  state: DemoState;
+  totals: { occupancy: number; arrivals: number; revenue: number; outstanding: number };
+  stockAlerts: StockAlert[];
+  metrics: DashboardMetrics;
+}) {
+  const attentionItems: Array<{ key: string; icon: LucideIcon; title: string; description: string }> = [];
+
+  if (metrics.pendingPurchases > 0) {
+    const pending = state.purchaseRequests.find((request) => request.status === "Awaiting Approval");
+    attentionItems.push({
+      key: "purchase",
+      icon: Bell,
+      title: `${metrics.pendingPurchases} purchase request${metrics.pendingPurchases > 1 ? "s" : ""} awaiting approval`,
+      description: pending ? `${pending.id} - ${pending.description}` : "Procurement needs manager sign-off.",
+    });
+  }
+
+  stockAlerts.slice(0, 5).forEach((alert) => {
+    attentionItems.push({
+      key: `${alert.kind}-${alert.item}`,
+      icon: Package,
+      title: `${alert.item} ${alert.severity === "danger" ? "critical" : "low stock"}`,
+      description: alert.message,
+    });
+  });
+
+  if (metrics.hkQueueCount > 0) {
+    attentionItems.push({
+      key: "hk-queue",
+      icon: BedDouble,
+      title: `${metrics.hkQueueCount} room${metrics.hkQueueCount > 1 ? "s" : ""} in housekeeping queue`,
+      description: state.housekeeping
+        .filter((task) => task.status !== "Available")
+        .map((task) => task.room)
+        .join(", "),
+    });
+  }
+
+  if (!metrics.checklistSubmittedToday) {
+    attentionItems.push({
+      key: "checklist-missing",
+      icon: ClipboardCheck,
+      title: "Today's housekeeping checklist not submitted",
+      description: metrics.latestChecklist
+        ? `Last submitted ${formatChecklistDateLabel(metrics.latestChecklist.date)} by ${metrics.latestChecklist.submittedBy}.`
+        : "No checklist history yet.",
+    });
+  }
+
+  if (metrics.arrivalsToday.length > 0) {
+    attentionItems.push({
+      key: "arrivals",
+      icon: DoorOpen,
+      title: `${metrics.arrivalsToday.length} arrival${metrics.arrivalsToday.length > 1 ? "s" : ""} expected today`,
+      description: metrics.arrivalsToday.map((reservation) => `${reservation.guest} (${reservation.room})`).join(", "),
+    });
+  }
+
+  if (metrics.departuresToday.length > 0) {
+    attentionItems.push({
+      key: "departures",
+      icon: LogOut,
+      title: `${metrics.departuresToday.length} departure${metrics.departuresToday.length > 1 ? "s" : ""} today`,
+      description: metrics.departuresToday.map((reservation) => `${reservation.guest} (${reservation.room})`).join(", "),
+    });
+  }
+
+  if (metrics.newEnquiries > 0) {
+    attentionItems.push({
+      key: "enquiries",
+      icon: Hotel,
+      title: `${metrics.newEnquiries} new enquir${metrics.newEnquiries > 1 ? "ies" : "y"}`,
+      description: "Front office follow-up required.",
+    });
+  }
+
+  if (metrics.pendingMessages > 0) {
+    attentionItems.push({
+      key: "messages",
+      icon: KeyRound,
+      title: `${metrics.pendingMessages} guest message${metrics.pendingMessages > 1 ? "s" : ""} pending`,
+      description: "Messages not yet delivered to guests.",
+    });
+  }
+
+  if (metrics.newKitchenOrders > 0) {
+    attentionItems.push({
+      key: "kitchen",
+      icon: ChefHat,
+      title: `${metrics.newKitchenOrders} new kitchen order${metrics.newKitchenOrders > 1 ? "s" : ""}`,
+      description: state.orders
+        .filter((order) => order.kitchenStatus === "New")
+        .map((order) => order.id)
+        .join(", "),
+    });
+  }
+
+  if (metrics.activeActivities > 0) {
+    attentionItems.push({
+      key: "activities",
+      icon: Activity,
+      title: `${metrics.activeActivities} activit${metrics.activeActivities > 1 ? "ies" : "y"} in progress`,
+      description: state.activities
+        .filter((booking) => booking.status === "In Progress")
+        .map((booking) => booking.activity)
+        .join(", "),
+    });
+  }
+
+  return (
+    <Page title="Executive Dashboard" description="Live operational picture for Blue Hills Camp." action="Print Manager Pack" icon={Printer}>
+      <div className="kpi-grid">
+        <KpiCard
+          label="Occupancy"
+          value={`${totals.occupancy}%`}
+          helper={`${metrics.roomSummary.occupied} of ${state.rooms.length} rooms occupied`}
+          icon={BedDouble}
+          trend={`${metrics.roomSummary.dirty} dirty, ${metrics.roomSummary.available} vacant`}
+        />
+        <KpiCard
+          label="Tomorrow's Arrivals"
+          value={totals.arrivals.toString()}
+          helper={`${metrics.readyRooms} clean rooms ready now`}
+          icon={DoorOpen}
+          trend={`${metrics.arrivalsToday.length} arriving today`}
+        />
+        <KpiCard label="Revenue Today" value={money.format(totals.revenue)} helper="Accommodation and POS" icon={Receipt} trend={`${metrics.inHouseGuests.length} in-house`} />
+        <KpiCard
+          label="Outstanding"
+          value={money.format(totals.outstanding)}
+          helper="Balances to collect before checkout"
+          icon={FileText}
+          trend={metrics.departuresToday.length > 0 ? `${metrics.departuresToday.length} departures today` : "No departures today"}
+          tone="danger"
+        />
+      </div>
+
+      <div className="content-grid">
+        <section className="panel">
+          <PanelHeader title="Front Office Today" subtitle={`Business date ${businessDateLabel} - arrivals, in-house guests, and departures.`} />
+          <div className="dashboard-summary-grid">
+            <article className="summary-stat">
+              <span>Arrivals Today</span>
+              <strong>{metrics.arrivalsToday.length}</strong>
+              <p>{metrics.arrivalsToday.length ? metrics.arrivalsToday.map((reservation) => reservation.guest).join(", ") : "No pending arrivals"}</p>
+            </article>
+            <article className="summary-stat">
+              <span>In-House Guests</span>
+              <strong>{metrics.inHouseGuests.length}</strong>
+              <p>{metrics.inHouseGuests.length ? metrics.inHouseGuests.map((reservation) => `${reservation.guest} (${reservation.room})`).join(", ") : "No checked-in guests"}</p>
+            </article>
+            <article className="summary-stat">
+              <span>Departures Today</span>
+              <strong>{metrics.departuresToday.length}</strong>
+              <p>{metrics.departuresToday.length ? metrics.departuresToday.map((reservation) => reservation.guest).join(", ") : "No departures scheduled"}</p>
+            </article>
+            <article className="summary-stat">
+              <span>Front Office Signals</span>
+              <strong>{metrics.newEnquiries + metrics.pendingMessages}</strong>
+              <p>
+                {metrics.newEnquiries} new enquir{metrics.newEnquiries === 1 ? "y" : "ies"}, {metrics.pendingMessages} pending message
+                {metrics.pendingMessages === 1 ? "" : "s"}
+              </p>
+            </article>
+          </div>
+          {(metrics.arrivalsToday.length > 0 || metrics.inHouseGuests.length > 0) && (
+            <table className="stock-table dashboard-table">
+              <thead>
+                <tr>
+                  <th>Guest</th>
+                  <th>Room</th>
+                  <th>Arrival</th>
+                  <th>Departure</th>
+                  <th>Status</th>
+                  <th>Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...metrics.arrivalsToday, ...metrics.inHouseGuests].map((reservation) => (
+                  <tr key={reservation.id}>
+                    <td>{reservation.guest}</td>
+                    <td>{reservation.room}</td>
+                    <td>{reservation.arrival}</td>
+                    <td>{reservation.departure}</td>
+                    <td>
+                      <Badge label={reservation.status} />
+                    </td>
+                    <td>{money.format(reservation.balance)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+
+        <section className="panel">
+          <PanelHeader title="Housekeeping Snapshot" subtitle="Latest checklist, room readiness, and stock position." />
+          <div className="dashboard-summary-grid">
+            <article className="summary-stat">
+              <span>Latest Checklist</span>
+              <strong>{metrics.latestChecklist ? formatChecklistDateLabel(metrics.latestChecklist.date) : "None"}</strong>
+              <p>
+                {metrics.latestChecklist
+                  ? `${metrics.latestChecklist.submittedBy} at ${metrics.latestChecklist.submittedAt}`
+                  : "No submissions yet"}
+                {metrics.checklistSubmittedToday ? " · Submitted today" : metrics.latestChecklist ? " · Not submitted today" : ""}
+              </p>
+            </article>
+            <article className="summary-stat">
+              <span>Rooms to Clean</span>
+              <strong>{metrics.dirtyRooms}</strong>
+              <p>{metrics.hkQueueCount} in active housekeeping queue</p>
+            </article>
+            <article className="summary-stat">
+              <span>Ready Rooms</span>
+              <strong>{metrics.readyRooms}</strong>
+              <p>{metrics.roomSummary.staff} staff, {metrics.roomSummary.maintenance} maintenance</p>
+            </article>
+            <article className="summary-stat">
+              <span>Stock Alerts</span>
+              <strong>{stockAlerts.length}</strong>
+              <p>
+                {stockAlerts.filter((alert) => alert.severity === "danger").length} critical, {stockAlerts.filter((alert) => alert.severity === "warning").length} warning
+              </p>
+            </article>
+          </div>
+          <table className="stock-table dashboard-table">
+            <thead>
+              <tr>
+                <th>Lodge</th>
+                <th>Occupied</th>
+                <th>Vacant</th>
+                <th>Checkout</th>
+                <th>Staff</th>
+              </tr>
+            </thead>
+            <tbody>
+              {LODGE_ORDER.map((lodge) => {
+                const lodgeSummary = metrics.roomSummary.byLodge[lodge];
+                return (
+                  <tr key={lodge}>
+                    <td>{lodge}</td>
+                    <td>{lodgeSummary.occupied}</td>
+                    <td>{lodgeSummary.available}</td>
+                    <td className={lodgeSummary.dirty > 0 ? "stock-low-cell" : ""}>{lodgeSummary.dirty}</td>
+                    <td>{lodgeSummary.staff}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      <div className="content-grid">
+        <section className="panel wide">
+          <PanelHeader title="Occupancy Density Chart" subtitle="Bookings by date with today's operational room status when unbooked." />
+          <DensityChart highlightDate={businessDateLabel} rooms={state.rooms} reservations={state.reservations} />
+        </section>
+
+        <section className="panel">
+          <PanelHeader title="Attention Queue" subtitle="Live front office and housekeeping items needing action." />
+          <div className="attention-list">
+            {attentionItems.length === 0 ? (
+              <p className="muted">No urgent items right now.</p>
+            ) : (
+              attentionItems.map((item) => <Attention key={item.key} icon={item.icon} title={item.title} description={item.description} />)
+            )}
+          </div>
+        </section>
+      </div>
+
+      <section className="panel">
+        <PanelHeader title="Recent Audit Trail" subtitle="Every demo action is written back to local storage." />
+        <AuditList audit={state.audit} />
+      </section>
+    </Page>
+  );
+}
+
+function FrontOffice({
+  state,
+  onOpenReservation,
+  onOpenNewReservation,
+  onOpenCheckIn,
+  onOpenCheckOut,
+  onCompleteManualTask,
+  onOpenNewEnquiry,
+  onQuoteEnquiry,
+  onConvertEnquiry,
+  onLoseEnquiry,
+  onOpenKeyModal,
+  onOpenNewMessage,
+  onMarkMessageDelivered,
+  onViewReceipt,
+}: {
+  state: DemoState;
+  onOpenReservation: (id: string) => void;
+  onOpenNewReservation: () => void;
+  onOpenCheckIn: (id: string) => void;
+  onOpenCheckOut: (id: string) => void;
+  onCompleteManualTask: (id: string) => void;
+  onOpenNewEnquiry: () => void;
+  onQuoteEnquiry: (id: string) => void;
+  onConvertEnquiry: (id: string) => void;
+  onLoseEnquiry: (id: string) => void;
+  onOpenKeyModal: (action: KeyLog["action"]) => void;
+  onOpenNewMessage: () => void;
+  onMarkMessageDelivered: (id: string) => void;
+  onViewReceipt: (receipt: Receipt) => void;
+}) {
+  const expectedArrivals = state.reservations.filter((reservation) => ["Tentative", "Confirmed", "Guaranteed"].includes(reservation.status)).length;
+  const inHouseGuests = state.reservations
+    .filter((reservation) => reservation.status === "Checked In")
+    .reduce((sum, reservation) => sum + reservation.guests, 0);
+  const followUps = state.enquiries.filter((enquiry) => enquiry.status === "Follow-up" || enquiry.status === "New").length;
+
+  return (
+    <Page
+      title="Front Office"
+      description="Enquiries, reservations, room planning, check-in and check-out."
+      action="New Reservation"
+      onAction={onOpenNewReservation}
+      icon={Hotel}
+    >
+      <div className="kpi-grid three">
+        <KpiCard label="Arrivals" value={expectedArrivals.toString()} helper="Not yet checked in" icon={DoorOpen} />
+        <KpiCard label="In-House Guests" value={inHouseGuests.toString()} helper="Including conference group" icon={Home} />
+        <KpiCard label="Follow Ups" value={followUps.toString()} helper="Quotations pending response" icon={ClipboardCheck} tone="warning" />
+      </div>
+
+      <section className="panel">
+        <PanelHeader title="Occupancy Planner" subtitle="Drag and resize will be wired to reservation changes in the full build." />
+        <DensityChart rooms={state.rooms} reservations={state.reservations} />
+      </section>
+
+      <section className="panel">
+        <PanelHeader
+          title="Reservation Register"
+          subtitle="Digitized version of the front-office density and daily schedule workflow. Click a row to view or edit."
+          action={
+            <button className="secondary-button" onClick={onOpenNewReservation} type="button">
+              <Plus size={16} />
+              New Reservation
+            </button>
+          }
+        />
+        <table>
+          <thead>
+            <tr>
+              <th>Reservation</th>
+              <th>Guest</th>
+              <th>Room</th>
+              <th>Dates</th>
+              <th>Status</th>
+              <th>Payment</th>
+              <th>Balance</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.reservations.map((reservation) => (
+              <tr className="clickable-row" key={reservation.id} onClick={() => onOpenReservation(reservation.id)}>
+                <td>
+                  <strong>{reservation.id}</strong>
+                  <span className="muted block">{reservation.organisation}</span>
+                </td>
+                <td>{reservation.guest}</td>
+                <td>{reservation.room}</td>
+                <td>
+                  {reservation.arrival} - {reservation.departure}
+                </td>
+                <td>
+                  <Badge label={reservation.status} />
+                </td>
+                <td>
+                  <Badge label={reservation.payment} />
+                </td>
+                <td>{money.format(reservation.balance)}</td>
+                <td className="actions-cell">
+                  {reservation.status !== "Checked In" && reservation.status !== "Checked Out" && reservation.status !== "Cancelled" && (
+                    <button
+                      className="secondary-button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onOpenCheckIn(reservation.id);
+                      }}
+                      type="button"
+                    >
+                      Check In
+                    </button>
+                  )}
+                  {reservation.status === "Checked In" && (
+                    <button
+                      className="secondary-button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onOpenCheckOut(reservation.id);
+                      }}
+                      type="button"
+                    >
+                      Check Out
+                    </button>
+                  )}
+                  {reservation.balance > 0 && reservation.status !== "Cancelled" && reservation.status !== "Checked Out" && (
+                    <button
+                      className="ghost-button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onOpenReservation(reservation.id);
+                      }}
+                      type="button"
+                    >
+                      Record Payment
+                    </button>
+                  )}
+                  {(reservation.status === "Checked Out" || reservation.status === "Cancelled") && <span className="muted">Closed</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="panel">
+        <PanelHeader
+          title="Payments & Receipts"
+          subtitle="Every deposit, balance payment and settlement issues a numbered receipt for the guest."
+        />
+        <table>
+          <thead>
+            <tr>
+              <th>Receipt</th>
+              <th>Reservation</th>
+              <th>Guest</th>
+              <th>Purpose</th>
+              <th>Amount</th>
+              <th>Method</th>
+              <th>Balance After</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.receipts.map((receipt) => (
+              <tr key={receipt.id}>
+                <td>{receipt.id}</td>
+                <td>{receipt.reservationId}</td>
+                <td>{receipt.guest}</td>
+                <td>
+                  <Badge label={receipt.purpose} />
+                </td>
+                <td>{money.format(receipt.amount)}</td>
+                <td>{receipt.method}</td>
+                <td>{money.format(receipt.balanceAfter)}</td>
+                <td>
+                  <button className="secondary-button" onClick={() => onViewReceipt(receipt)} type="button">
+                    View &amp; Print
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <div className="content-grid">
+        <section className="panel">
+          <PanelHeader
+            title="Enquiry & Quotation Desk"
+            subtitle="Captures telephone, WhatsApp, email and walk-in leads before reservations."
+            action={
+              <button className="secondary-button" onClick={onOpenNewEnquiry} type="button">
+                <Plus size={16} />
+                New Enquiry
+              </button>
+            }
+          />
+          <table>
+            <thead>
+              <tr>
+                <th>Enquiry</th>
+                <th>Source</th>
+                <th>Guest</th>
+                <th>Request</th>
+                <th>Status</th>
+                <th>Next Step</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {state.enquiries.map((enquiry) => (
+                <tr key={enquiry.id}>
+                  <td>{enquiry.id}</td>
+                  <td>{enquiry.source}</td>
+                  <td>{enquiry.guest}</td>
+                  <td>{enquiry.request}</td>
+                  <td>
+                    <Badge label={enquiry.status} />
+                  </td>
+                  <td>{enquiry.nextStep}</td>
+                  <td className="actions-cell">
+                    {enquiry.status !== "Confirmed" && enquiry.status !== "Lost" && (
+                      <>
+                        {enquiry.status === "New" && (
+                          <button className="secondary-button" onClick={() => onQuoteEnquiry(enquiry.id)} type="button">
+                            Quote
+                          </button>
+                        )}
+                        <button className="secondary-button" onClick={() => onConvertEnquiry(enquiry.id)} type="button">
+                          Convert
+                        </button>
+                        <button className="ghost-button" onClick={() => onLoseEnquiry(enquiry.id)} type="button">
+                          Mark Lost
+                        </button>
+                      </>
+                    )}
+                    {(enquiry.status === "Confirmed" || enquiry.status === "Lost") && <span className="muted">Closed</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+
+        <section className="panel">
+          <PanelHeader title="Manual Forms & Exceptions" subtitle="Forms and approvals the staff currently manage on paper." />
+          <div className="stack">
+            {state.manualTasks
+              .filter((task) => ["Front Office", "Conference Hall", "Zebra 3"].includes(task.area))
+              .map((task) => (
+                <ManualTaskCard key={task.id} task={task} onComplete={onCompleteManualTask} />
+              ))}
+          </div>
+        </section>
+      </div>
+
+      <div className="content-grid">
+        <section className="panel">
+          <PanelHeader
+            title="Message & Parcel Cards"
+            subtitle="Guest messages are held, placed in key boxes, or delivered on arrival."
+            action={
+              <button className="secondary-button" onClick={onOpenNewMessage} type="button">
+                <Plus size={16} />
+                New Message
+              </button>
+            }
+          />
+          <div className="stack">
+            {state.messages.map((message) => (
+              <div className="task-card" key={message.id}>
+                <div>
+                  <strong>
+                    {message.guest} - Room {message.room || "TBC"}
+                  </strong>
+                  <span>
+                    {message.caller}: {message.message}
+                  </span>
+                </div>
+                <Badge label={message.status} />
+                {message.status !== "Delivered" && (
+                  <button className="secondary-button" onClick={() => onMarkMessageDelivered(message.id)} type="button">
+                    Mark Delivered
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="panel">
+          <PanelHeader title="Key Control Log" subtitle="Tracks issued, returned, spare, missing and broken keys." />
+          <div className="button-row">
+            <button className="secondary-button" onClick={() => onOpenKeyModal("Issued")} type="button">
+              <KeyRound size={16} />
+              Issue Key
+            </button>
+            <button className="secondary-button" onClick={() => onOpenKeyModal("Returned")} type="button">
+              Return Key
+            </button>
+            <button className="secondary-button" onClick={() => onOpenKeyModal("Spare Key Released")} type="button">
+              Release Spare
+            </button>
+            <button className="ghost-button" onClick={() => onOpenKeyModal("Missing Report")} type="button">
+              Report Missing
+            </button>
+          </div>
+          <div className="stack">
+            {state.keyLogs.map((log) => (
+              <div className="task-card" key={log.id}>
+                <div>
+                  <strong>
+                    {log.room} - {log.action}
+                  </strong>
+                  <span>
+                    {log.reason} by {log.staff}
+                  </span>
+                </div>
+                <Badge label={log.action} />
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    </Page>
+  );
+}
+
+function RestaurantKitchen({
+  state,
+  onAdvanceKitchen,
+  onCompleteManualTask,
+  onAdvanceComplaint,
+}: {
+  state: DemoState;
+  onAdvanceKitchen: (id: string) => void;
+  onCompleteManualTask: (id: string) => void;
+  onAdvanceComplaint: (id: string) => void;
+}) {
+  return (
+    <Page title="Restaurant & Kitchen" description="Touch-friendly POS and kitchen display workflow." action="New POS Order" icon={ShoppingCart}>
+      <div className="pos-layout">
+        <section className="panel pos-panel">
+          <PanelHeader title="Restaurant POS" subtitle="Fast order taking with cash, card, or room charge." />
+          <div className="menu-grid">
+            {["Chicken Burger", "Greek Salad", "Beef Skewers", "Breakfast Plate", "Mazoe Orange", "Castle Lite"].map((item) => (
+              <button className="menu-tile" key={item} type="button">
+                <Utensils size={18} />
+                {item}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="panel kitchen-board">
+          <PanelHeader title="Kitchen Display" subtitle="Orders move from new to preparing to ready." />
+          <div className="ticket-list">
+            {state.orders.map((order) => (
+              <article className="ticket" key={order.id}>
+                <div className="ticket-top">
+                  <strong>{order.id}</strong>
+                  <Badge label={order.kitchenStatus} />
+                </div>
+                <p>
+                  {order.table} - {order.guest}
+                </p>
+                <ul>
+                  {order.items.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+                <div className="ticket-footer">
+                  <span>{money.format(order.total)}</span>
+                  <button className="primary-button small" onClick={() => onAdvanceKitchen(order.id)} type="button">
+                    Advance
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <div className="content-grid">
+        <section className="panel">
+          <PanelHeader title="Shift Opening, Closing & Hygiene" subtitle="Menus, tables, cutlery, fridge temperatures, gas and pest-control checks." />
+          <div className="stack">
+            {state.manualTasks
+              .filter((task) => ["Restaurant", "Kitchen"].includes(task.area))
+              .map((task) => (
+                <ManualTaskCard key={task.id} task={task} onComplete={onCompleteManualTask} />
+              ))}
+          </div>
+        </section>
+
+        <section className="panel">
+          <PanelHeader title="Guest Complaint Log" subtitle="Manual requires every complaint to be logged, investigated and reported to management." />
+          <div className="stack">
+            {state.complaints
+              .filter((complaint) => complaint.department === "Restaurant")
+              .map((complaint) => (
+                <div className="task-card" key={complaint.id}>
+                  <div>
+                    <strong>
+                      {complaint.id} - {complaint.guest}
+                    </strong>
+                    <span>{complaint.issue}</span>
+                  </div>
+                  <Badge label={complaint.status} />
+                  {complaint.status !== "Resolved" && (
+                    <button className="secondary-button" onClick={() => onAdvanceComplaint(complaint.id)} type="button">
+                      Advance
+                    </button>
+                  )}
+                </div>
+              ))}
+          </div>
+        </section>
+      </div>
+
+      <section className="panel">
+        <PanelHeader title="Manual Controls Still Required" subtitle="Visible reminders for service standards the POS must eventually enforce." />
+        <div className="control-grid">
+          <ControlCard title="Manager Void Approval" detail="Wrong POS orders must be voided by assistant manager or above." status="Not Wired" />
+          <ControlCard title="Bar Age Verification" detail="Alcoholic beverage orders require legal drinking-age verification." status="Required" />
+          <ControlCard title="Bill Folder Settlement" detail="Waiter double-checks bill, presents folder, processes payment in 4-5 minutes." status="Demo Script" />
+          <ControlCard title="Breakage Register" detail="Crockery, cutlery and careless breakages must be recorded and reported." status="Missing" />
+        </div>
+      </section>
+    </Page>
+  );
+}
+
+function Operations({
+  state,
+  stockAlerts,
+  onCompleteHousekeeping,
+  onCompleteManualTask,
+  onAdvanceSafetyRecord,
+  onOpenChecklistDrawer,
+  onOpenChecklistDetail,
+}: {
+  state: DemoState;
+  stockAlerts: StockAlert[];
+  onCompleteHousekeeping: (id: string) => void;
+  onCompleteManualTask: (id: string) => void;
+  onAdvanceSafetyRecord: (id: string) => void;
+  onOpenChecklistDrawer: () => void;
+  onOpenChecklistDetail: (checklist: HousekeepingChecklist) => void;
+}) {
+  const roomsByLodge = LODGE_ORDER.map((lodge) => ({
+    lodge,
+    rooms: state.rooms.filter((room) => room.lodge === lodge),
+  }));
+
+  return (
+    <Page
+      title="Housekeeping & Activities"
+      description="Daily linen, chemical and room checklists with searchable history."
+      action="New Daily Checklist"
+      onAction={onOpenChecklistDrawer}
+      icon={Sparkles}
+    >
+      <div className="content-grid">
+        <section className="panel wide">
+          <PanelHeader title="Room Status Board" subtitle="Grouped by lodge. Checkout automatically creates housekeeping work." />
+          <div className="lodge-grid">
+            {roomsByLodge.map(({ lodge, rooms }) => (
+              <div className="lodge-section" key={lodge}>
+                <h3 className="lodge-heading">{lodge}</h3>
+                <div className="room-grid">
+                  {rooms.map((room) => (
+                    <div className="room-card" key={room.id}>
+                      <div>
+                        <strong>{room.number}</strong>
+                        <span>{room.type}</span>
+                      </div>
+                      <Badge label={room.status} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="panel">
+          <PanelHeader title="Housekeeping Queue" subtitle="Clean, inspect, and release rooms back to reception." />
+          <div className="stack">
+            {state.housekeeping.map((task) => (
+              <div className="task-card" key={task.id}>
+                <div>
+                  <strong>{task.room}</strong>
+                  <span>
+                    {task.assignedTo} - {task.priority}
+                  </span>
+                </div>
+                <Badge label={task.status} />
+                {task.status !== "Available" && (
+                  <button className="secondary-button" onClick={() => onCompleteHousekeeping(task.id)} type="button">
+                    Pass Inspection
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <div className="content-grid">
+        <section className="panel">
+          <PanelHeader
+            title="Daily Checklist History"
+            subtitle="Every submission is saved with date, submitter, and full stock counts."
+            action={
+              <button className="secondary-button" onClick={onOpenChecklistDrawer} type="button">
+                New Checklist
+              </button>
+            }
+          />
+          {state.housekeepingChecklists.length === 0 ? (
+            <p className="muted">No checklists submitted yet. Start today's housekeeping report.</p>
+          ) : (
+            <table className="stock-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Submitted By</th>
+                  <th>Time</th>
+                  <th>Rooms</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...state.housekeepingChecklists]
+                  .sort((a, b) => b.date.localeCompare(a.date))
+                  .map((checklist) => (
+                    <tr key={checklist.id}>
+                      <td>{formatChecklistDateLabel(checklist.date)}</td>
+                      <td>{checklist.submittedBy}</td>
+                      <td>{checklist.submittedAt}</td>
+                      <td>{checklist.roomStatuses.length}</td>
+                      <td>
+                        <button className="secondary-button" onClick={() => onOpenChecklistDetail(checklist)} type="button">
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+
+        <section className="panel">
+          <PanelHeader title="Stock & Linen Alerts" subtitle="Auto-detected from the latest daily checklist submission." />
+          {stockAlerts.length === 0 ? (
+            <p className="muted">No stock alerts from the latest checklist.</p>
+          ) : (
+            <div className="attention-list">
+              {stockAlerts.map((alert) => (
+                <Attention
+                  key={`${alert.kind}-${alert.item}`}
+                  icon={Package}
+                  title={`${alert.item} (${alert.kind})`}
+                  description={alert.message}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      <section className="panel">
+        <PanelHeader title="Activities Schedule" subtitle="Bookings with instructors and equipment accountability." />
+        <table>
+          <thead>
+            <tr>
+              <th>Booking</th>
+              <th>Activity</th>
+              <th>Guest</th>
+              <th>Time</th>
+              <th>Instructor</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.activities.map((booking) => (
+              <tr key={booking.id}>
+                <td>{booking.id}</td>
+                <td>{booking.activity}</td>
+                <td>{booking.guest}</td>
+                <td>{booking.time}</td>
+                <td>{booking.instructor}</td>
+                <td>
+                  <Badge label={booking.status} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <div className="content-grid">
+        <section className="panel">
+          <PanelHeader title="Room & Public Area Checklists" subtitle="Chalet, toilet, conference and administration checklist items from the manuals." />
+          <div className="stack">
+            {state.manualTasks
+              .filter((task) => ["Kudu 2", "Quad Bikes"].includes(task.area))
+              .map((task) => (
+                <ManualTaskCard key={task.id} task={task} onComplete={onCompleteManualTask} />
+              ))}
+          </div>
+        </section>
+
+        <section className="panel">
+          <PanelHeader title="Activity Safety & Equipment" subtitle="Daily inspections, blocked equipment, damaged tags and safety report workflow." />
+          <div className="stack">
+            {state.safetyRecords.map((record) => (
+              <div className="task-card" key={record.id}>
+                <div>
+                  <strong>
+                    {record.activity} - {record.check}
+                  </strong>
+                  <span>Owner: {record.owner}</span>
+                </div>
+                <Badge label={record.status} />
+                {record.status !== "Passed" && (
+                  <button className="secondary-button" onClick={() => onAdvanceSafetyRecord(record.id)} type="button">
+                    Update
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <section className="panel">
+        <PanelHeader title="Outdoor Activity Rules Still To Digitize" subtitle="These are critical safety workflows surfaced by the manuals." />
+        <div className="control-grid">
+          <ControlCard title="Indemnity & Guardian Forms" detail="Minors require parent or guardian signature before zipline, quad bike, biking or mountaineering." status="Missing" />
+          <ControlCard title="Weather Restrictions" detail="Thunder, lightning, heavy rain, extreme heat and unsafe wind must block or pause activities." status="Missing" />
+          <ControlCard title="Medical Screening" detail="Pregnancy, heart conditions, surgery, neck/back issues and alcohol/drug checks affect eligibility." status="Missing" />
+          <ControlCard title="Emergency Take-Down Report" detail="Near misses, injuries, panic events and equipment failure must produce safety reports within 24 hours." status="Required" />
+        </div>
+      </section>
+    </Page>
+  );
+}
+
+function Procurement({ state, onApprovePurchase }: { state: DemoState; onApprovePurchase: (id: string) => void }) {
+  return (
+    <Page title="Procurement & Stores" description="Purchase request to approval, receipt attachment, goods received, and stock update." action="New Purchase Request" icon={Package}>
+      <section className="panel">
+        <PanelHeader title="Purchase Request Tracker" subtitle="Digitizes the paper PO workflow with manager approvals." />
+        <table>
+          <thead>
+            <tr>
+              <th>Request</th>
+              <th>Department</th>
+              <th>Supplier</th>
+              <th>Description</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.purchaseRequests.map((request) => (
+              <tr key={request.id}>
+                <td>{request.id}</td>
+                <td>{request.department}</td>
+                <td>{request.supplier}</td>
+                <td>{request.description}</td>
+                <td>{money.format(request.amount)}</td>
+                <td>
+                  <Badge label={request.status} />
+                </td>
+                <td>
+                  {request.status !== "Goods Received" ? (
+                    <button className="secondary-button" onClick={() => onApprovePurchase(request.id)} type="button">
+                      {request.status === "Awaiting Approval" ? "Approve" : "Receive Goods"}
+                    </button>
+                  ) : (
+                    <span className="muted">Closed</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <div className="content-grid">
+        <section className="panel">
+          <PanelHeader title="Stock Alerts" subtitle="Demo inventory signals for stores and management." />
+          <div className="attention-list">
+            <Attention icon={Package} title="Castle Lite below reorder level" description="Bar stock variance requires review." />
+            <Attention icon={Warehouse} title="Paintball masks due for count" description="Field quantities must match store quantities." />
+          </div>
+        </section>
+        <section className="panel">
+          <PanelHeader title="Document Control" subtitle="Receipts and PDFs will attach to each PO in the backend build." />
+          <div className="document-preview">
+            <Receipt size={34} />
+            <strong>PR-318 Receipt Attachment</strong>
+            <span>Ready for scanned supplier receipt and finance verification.</span>
+          </div>
+        </section>
+      </div>
+
+      <section className="panel">
+        <PanelHeader title="Stores & Bar Stock Workflows Still To Digitize" subtitle="Manual processes that should be visible in the demo before the backend build." />
+        <div className="control-grid">
+          <ControlCard title="Goods Received Note" detail="Stores verifies supplier quantity, matches PO, records GRN and updates stock." status="Partial" />
+          <ControlCard title="Department Stock Issue" detail="Departments request stock, stores approves, stock reduces and consumption is recorded." status="Missing" />
+          <ControlCard title="Bar Opening / Closing Count" detail="Opening count, sales, transfers, closing count, variance and manager approval." status="Missing" />
+          <ControlCard title="Gate Pass & Emergency Stores Access" detail="Security, chef and duty manager supervise emergency store room openings." status="Missing" />
+        </div>
+      </section>
+    </Page>
+  );
+}
+
+function Finance({
+  state,
+  totals,
+  onMarkReportPrinted,
+}: {
+  state: DemoState;
+  totals: { occupancy: number; arrivals: number; revenue: number; outstanding: number };
+  onMarkReportPrinted: (id: string) => void;
+}) {
+  return (
+    <Page title="Finance & Night Audit" description="Daily revenue, expenses, cash summary, verification, and close of business day." action="Close Business Day" icon={LogOut}>
+      <div className="kpi-grid">
+        <KpiCard label="Accommodation" value={money.format(640)} helper="Posted room charges" icon={Hotel} />
+        <KpiCard label="Restaurant & Bar" value={money.format(state.orders.reduce((sum, order) => sum + order.total, 0))} helper="POS sales today" icon={Utensils} />
+        <KpiCard label="Outstanding" value={money.format(totals.outstanding)} helper="Balances before checkout" icon={FileText} tone="danger" />
+        <KpiCard label="Cash Review" value="Ready" helper="Night audit checklist" icon={ClipboardCheck} tone="success" />
+      </div>
+
+      <section className="panel">
+        <PanelHeader title="Night Audit Checklist" subtitle="Reception verifies the full day before opening the next business date." />
+        <div className="checklist">
+          {[
+            "Take shift handover and count opening float",
+            "Balance F&B outlet reports against POS and manual receipts",
+            "Investigate missing checks, duplicate postings and voids",
+            "Verify check-ins and check-outs",
+            "Verify accommodation payments",
+            "Verify restaurant and bar sales",
+            "Verify activities revenue",
+            "Check rate variance and zero-rate rooms",
+            "Confirm all cash registers are closed",
+            "Generate daily finance report",
+            "Archive audit trail and open next business day",
+          ].map((item) => (
+            <label key={item}>
+              <input defaultChecked type="checkbox" />
+              {item}
+            </label>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <PanelHeader title="Audit Trail" subtitle="All transactions keep user, time, department, and status history." />
+        <AuditList audit={state.audit} />
+      </section>
+
+      <div className="content-grid">
+        <section className="panel">
+          <PanelHeader title="Float, Cash Drop & Register Balancing" subtitle="Shortfalls and surpluses are reported to directors at end of day." />
+          <table>
+            <thead>
+              <tr>
+                <th>Area</th>
+                <th>Expected</th>
+                <th>Counted</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {state.cashControls.map((control) => (
+                <tr key={control.id}>
+                  <td>{control.area}</td>
+                  <td>{money.format(control.expected)}</td>
+                  <td>{control.counted ? money.format(control.counted) : "Not counted"}</td>
+                  <td>
+                    <Badge label={control.status} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+
+        <section className="panel">
+          <PanelHeader title="Downtime & Department Reports" subtitle="Printed/PDF reports for front desk, housekeeping, security, kitchen and accounts." />
+          <div className="stack">
+            {state.reports.map((report) => (
+              <div className="task-card" key={report.id}>
+                <div>
+                  <strong>{report.report}</strong>
+                  <span>{report.schedule}</span>
+                </div>
+                <Badge label={report.status} />
+                <button className="secondary-button" onClick={() => onMarkReportPrinted(report.id)} type="button">
+                  Generate
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <section className="panel">
+        <PanelHeader title="Night Audit Controls Still To Implement" subtitle="Manual-required checks that need real backend/accounting support later." />
+        <div className="control-grid">
+          <ControlCard title="Bill-To-Company Attachments" detail="Company letters and restaurant checks must be attached before reconciliation." status="Missing" />
+          <ControlCard title="Credit Card Tips & Paid-Outs" detail="Tips must be separated and paid out with corresponding entries." status="Missing" />
+          <ControlCard title="Outlet Settlement Lock" detail="Outlets should stop settling checks while end-of-day is running." status="Backend Needed" />
+          <ControlCard title="Printer & Paper Readiness" detail="EOD cannot begin until the printer is connected and loaded." status="Tauri Needed" />
+        </div>
+      </section>
+    </Page>
+  );
+}
+
+function Page({
+  title,
+  description,
+  action,
+  onAction,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  description: string;
+  action: string;
+  onAction?: () => void;
+  icon: LucideIcon;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="page">
+      <div className="breadcrumb">Dashboard &gt; {title}</div>
+      <div className="page-header">
+        <div>
+          <div className="eyebrow">
+            <Icon size={17} />
+            Blue Hills Camp
+          </div>
+          <h1>{title}</h1>
+          <p>{description}</p>
+        </div>
+        <button className="primary-button" onClick={onAction} type="button">
+          {action}
+        </button>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+  helper,
+  icon: Icon,
+  trend,
+  tone,
+}: {
+  label: string;
+  value: string;
+  helper: string;
+  icon: LucideIcon;
+  trend?: string;
+  tone?: "success" | "warning" | "danger";
+}) {
+  return (
+    <article className={`kpi-card ${tone ?? ""}`}>
+      <div className="kpi-icon">
+        <Icon size={20} />
+      </div>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <p>{helper}</p>
+      {trend && <small>{trend}</small>}
+    </article>
+  );
+}
+
+function ManualTaskCard({ task, onComplete }: { task: ManualTask; onComplete: (id: string) => void }) {
+  return (
+    <div className="task-card">
+      <div>
+        <strong>{task.area}</strong>
+        <span>{task.item}</span>
+        <small>Owner: {task.owner}</small>
+      </div>
+      <Badge label={task.status} />
+      {task.status !== "Done" && (
+        <button className="secondary-button" onClick={() => onComplete(task.id)} type="button">
+          Mark Done
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ControlCard({ title, detail, status }: { title: string; detail: string; status: string }) {
+  return (
+    <article className="control-card">
+      <div>
+        <strong>{title}</strong>
+        <p>{detail}</p>
+      </div>
+      <Badge label={status} />
+    </article>
+  );
+}
+
+function PanelHeader({ title, subtitle, action }: { title: string; subtitle: string; action?: React.ReactNode }) {
+  return (
+    <div className="panel-header">
+      <div>
+        <h2>{title}</h2>
+        <p>{subtitle}</p>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="form-field">
+      <span>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function Modal({
+  title,
+  description,
+  onClose,
+  children,
+}: {
+  title: string;
+  description?: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal-panel" onClick={(event) => event.stopPropagation()}>
+        <div className="sheet-header">
+          <div>
+            <h2>{title}</h2>
+            {description && <p>{description}</p>}
+          </div>
+          <button className="icon-button" onClick={onClose} type="button" aria-label="Close">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="sheet-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function Drawer({
+  title,
+  description,
+  onClose,
+  children,
+}: {
+  title: string;
+  description?: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="drawer-panel" onClick={(event) => event.stopPropagation()}>
+        <div className="sheet-header">
+          <div>
+            <h2>{title}</h2>
+            {description && <p>{description}</p>}
+          </div>
+          <button className="icon-button" onClick={onClose} type="button" aria-label="Close">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="sheet-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function ReservationDrawer({
+  reservation,
+  prefill,
+  rooms,
+  orders,
+  onClose,
+  onSave,
+  onCancelReservation,
+  onExtendStay,
+  onOpenCheckIn,
+  onOpenCheckOut,
+  onRecordPayment,
+}: {
+  reservation: Reservation | null;
+  prefill?: { guest?: string; arrival?: string } | null;
+  rooms: Room[];
+  orders: PosOrder[];
+  onClose: () => void;
+  onSave: (values: ReservationFormValues, existingId: string | null) => void;
+  onCancelReservation: (id: string) => void;
+  onExtendStay: (id: string, newDeparture: string) => void;
+  onOpenCheckIn: (id: string) => void;
+  onOpenCheckOut: (id: string) => void;
+  onRecordPayment: (id: string, details: { amount: number; method: PaymentMethod; purpose: ReceiptPurpose }) => void;
+}) {
+  const [guest, setGuest] = useState(reservation?.guest ?? prefill?.guest ?? "");
+  const [organisation, setOrganisation] = useState(reservation?.organisation ?? "");
+  const [phone, setPhone] = useState(reservation?.phone ?? "");
+  const [email, setEmail] = useState(reservation?.email ?? "");
+  const [room, setRoom] = useState(reservation?.room ?? rooms[0]?.number ?? "");
+  const [arrival, setArrival] = useState(reservation?.arrival ?? prefill?.arrival ?? dates[0]);
+  const [departure, setDeparture] = useState(reservation?.departure ?? dates[1]);
+  const [guestCount, setGuestCount] = useState(reservation?.guests ?? 1);
+  const [purpose, setPurpose] = useState<Reservation["purpose"]>(reservation?.purpose ?? "Accommodation");
+  const [rate, setRate] = useState(reservation?.rate ?? 80);
+  const [depositAmount, setDepositAmount] = useState(0);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("Cash");
+  const [notes, setNotes] = useState(reservation?.notes ?? "");
+  const [extendDate, setExtendDate] = useState(reservation?.departure ?? dates[1]);
+  const [paymentAmount, setPaymentAmount] = useState(reservation?.balance ?? 0);
+  const [paymentMethodForRecord, setPaymentMethodForRecord] = useState<PaymentMethod>("Cash");
+  const [paymentPurpose, setPaymentPurpose] = useState<ReceiptPurpose>("Balance Payment");
+
+  const nights = Math.max(1, dates.indexOf(departure) - dates.indexOf(arrival));
+  const estimatedTotal = nights * rate;
+  const roomOrders = reservation ? orders.filter((order) => order.guest === reservation.guest) : [];
+
+  const canCheckIn = reservation && !["Checked In", "Checked Out", "Cancelled"].includes(reservation.status);
+  const canCheckOut = reservation?.status === "Checked In";
+  const canCancel = reservation && !["Checked Out", "Cancelled"].includes(reservation.status);
+
+  return (
+    <Drawer
+      title={reservation ? `${reservation.id} - ${reservation.guest}` : "New Reservation"}
+      description={
+        reservation
+          ? "Reservation details, payment and room allocation."
+          : "Capture the guest, dates and room to log a new booking."
+      }
+      onClose={onClose}
+    >
+      <div className="form-section">
+        <h3>Guest Information</h3>
+        <div className="form-grid">
+          <Field label="Guest Name">
+            <input value={guest} onChange={(event) => setGuest(event.target.value)} placeholder="e.g. Tariro Moyo" />
+          </Field>
+          <Field label="Organisation / Family">
+            <input value={organisation} onChange={(event) => setOrganisation(event.target.value)} placeholder="Optional" />
+          </Field>
+          <Field label="Phone">
+            <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+263 7..." />
+          </Field>
+          <Field label="Email">
+            <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Optional" />
+          </Field>
+        </div>
+      </div>
+
+      <div className="form-section">
+        <h3>Accommodation</h3>
+        <div className="form-grid">
+          <Field label="Room">
+            <select value={room} onChange={(event) => setRoom(event.target.value)}>
+              {rooms.map((item) => (
+                <option key={item.id} value={item.number}>
+                  {item.number} - {item.type}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Purpose">
+            <select value={purpose} onChange={(event) => setPurpose(event.target.value as Reservation["purpose"])}>
+              <option value="Accommodation">Accommodation</option>
+              <option value="Conference Group">Conference Group</option>
+              <option value="Activities">Activities</option>
+            </select>
+          </Field>
+          <Field label="Arrival Date">
+            <select value={arrival} onChange={(event) => setArrival(event.target.value)}>
+              {dates.map((date) => (
+                <option key={date} value={date}>
+                  {date}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Departure Date">
+            <select value={departure} onChange={(event) => setDeparture(event.target.value)}>
+              {dates.map((date) => (
+                <option key={date} value={date}>
+                  {date}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Number of Guests">
+            <input type="number" min={1} value={guestCount} onChange={(event) => setGuestCount(Number(event.target.value))} />
+          </Field>
+          <Field label="Rate per Night (USD)">
+            <input type="number" min={0} value={rate} onChange={(event) => setRate(Number(event.target.value))} />
+          </Field>
+        </div>
+      </div>
+
+      {!reservation && (
+        <div className="form-section">
+          <h3>Payment</h3>
+          <div className="form-grid">
+            <Field label="Estimated Total">
+              <input disabled value={money.format(estimatedTotal)} />
+            </Field>
+            <Field label="Deposit Received">
+              <input type="number" min={0} value={depositAmount} onChange={(event) => setDepositAmount(Number(event.target.value))} />
+            </Field>
+            <Field label="Payment Method">
+              <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}>
+                <option>Cash</option>
+                <option>Ecocash</option>
+                <option>Bank Transfer</option>
+                <option>Card</option>
+              </select>
+            </Field>
+          </div>
+        </div>
+      )}
+
+      {reservation && reservation.status !== "Cancelled" && (
+        <div className="form-section">
+          <h3>Record a Payment</h3>
+          <div className="folio-line">
+            <span>Outstanding Balance</span>
+            <strong>{money.format(reservation.balance)}</strong>
+          </div>
+          {reservation.balance > 0 ? (
+            <>
+              <div className="form-grid">
+                <Field label="Amount Received">
+                  <input
+                    max={reservation.balance}
+                    min={0}
+                    onChange={(event) => setPaymentAmount(Number(event.target.value))}
+                    type="number"
+                    value={paymentAmount}
+                  />
+                </Field>
+                <Field label="Method">
+                  <select onChange={(event) => setPaymentMethodForRecord(event.target.value as PaymentMethod)} value={paymentMethodForRecord}>
+                    <option>Cash</option>
+                    <option>Ecocash</option>
+                    <option>Bank Transfer</option>
+                    <option>Card</option>
+                  </select>
+                </Field>
+                <Field label="Purpose">
+                  <select onChange={(event) => setPaymentPurpose(event.target.value as ReceiptPurpose)} value={paymentPurpose}>
+                    <option value="Deposit">Deposit</option>
+                    <option value="Balance Payment">Balance Payment</option>
+                    <option value="Full Settlement">Full Settlement</option>
+                  </select>
+                </Field>
+              </div>
+              <button
+                className="secondary-button"
+                disabled={paymentAmount <= 0}
+                onClick={() => onRecordPayment(reservation.id, { amount: paymentAmount, method: paymentMethodForRecord, purpose: paymentPurpose })}
+                type="button"
+              >
+                Record Payment &amp; Issue Receipt
+              </button>
+            </>
+          ) : (
+            <span className="muted">Account fully settled.</span>
+          )}
+        </div>
+      )}
+
+      <div className="form-section">
+        <h3>Notes</h3>
+        <textarea
+          value={notes}
+          onChange={(event) => setNotes(event.target.value)}
+          placeholder="Special requests, dietary needs, VIP notes..."
+          rows={3}
+        />
+      </div>
+
+      {reservation && roomOrders.length > 0 && (
+        <div className="form-section">
+          <h3>Room Charges on File</h3>
+          <div className="stack">
+            {roomOrders.map((order) => (
+              <div className="task-card" key={order.id}>
+                <div>
+                  <strong>{order.id}</strong>
+                  <span>{order.items.join(", ")}</span>
+                </div>
+                <strong>{money.format(order.total)}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="sheet-footer">
+        <button
+          className="primary-button"
+          disabled={!guest || !room}
+          onClick={() =>
+            onSave(
+              { guest, organisation, phone, email, room, arrival, departure, guests: guestCount, purpose, rate, depositAmount, paymentMethod, notes },
+              reservation?.id ?? null,
+            )
+          }
+          type="button"
+        >
+          {reservation ? "Save Changes" : "Create Reservation"}
+        </button>
+        {canCancel && (
+          <button className="secondary-button" onClick={() => onCancelReservation(reservation.id)} type="button">
+            Cancel Reservation
+          </button>
+        )}
+      </div>
+
+      {reservation && (canCheckIn || canCheckOut) && (
+        <div className="form-section">
+          <h3>Stay Actions</h3>
+          <div className="button-row">
+            {canCheckIn && (
+              <button className="secondary-button" onClick={() => onOpenCheckIn(reservation.id)} type="button">
+                Open Check-In Form
+              </button>
+            )}
+            {canCheckOut && (
+              <button className="secondary-button" onClick={() => onOpenCheckOut(reservation.id)} type="button">
+                Open Check-Out &amp; Folio
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {reservation && canCancel && (
+        <div className="form-section">
+          <h3>Extend Stay</h3>
+          <div className="button-row">
+            <select value={extendDate} onChange={(event) => setExtendDate(event.target.value)}>
+              {dates.map((date) => (
+                <option key={date} value={date}>
+                  {date}
+                </option>
+              ))}
+            </select>
+            <button className="secondary-button" onClick={() => onExtendStay(reservation.id, extendDate)} type="button">
+              Extend Stay
+            </button>
+          </div>
+        </div>
+      )}
+    </Drawer>
+  );
+}
+
+function CheckInModal({
+  reservation,
+  onClose,
+  onConfirm,
+}: {
+  reservation: Reservation;
+  onClose: () => void;
+  onConfirm: (id: string, details: { idNumber: string; vehicle: string; paymentMethod: PaymentMethod; amountReceived: number; signed: boolean }) => void;
+}) {
+  const [idNumber, setIdNumber] = useState(reservation.idNumber ?? "");
+  const [vehicle, setVehicle] = useState(reservation.vehicle ?? "");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("Cash");
+  const [amountReceived, setAmountReceived] = useState(reservation.balance);
+  const [signed, setSigned] = useState(false);
+
+  return (
+    <Modal title={`Check In - ${reservation.guest}`} description={`${reservation.id} - Room ${reservation.room}`} onClose={onClose}>
+      <div className="form-grid">
+        <Field label="ID / Passport Number">
+          <input value={idNumber} onChange={(event) => setIdNumber(event.target.value)} placeholder="Required for registration card" />
+        </Field>
+        <Field label="Vehicle Registration">
+          <input value={vehicle} onChange={(event) => setVehicle(event.target.value)} placeholder="Optional" />
+        </Field>
+        <Field label={`Amount Collected (Balance: ${money.format(reservation.balance)})`}>
+          <input
+            disabled={reservation.balance === 0}
+            max={reservation.balance}
+            min={0}
+            onChange={(event) => setAmountReceived(Number(event.target.value))}
+            type="number"
+            value={amountReceived}
+          />
+        </Field>
+        <Field label="Form of Payment">
+          <select disabled={amountReceived === 0} onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)} value={paymentMethod}>
+            <option>Cash</option>
+            <option>Ecocash</option>
+            <option>Bank Transfer</option>
+            <option>Card</option>
+          </select>
+        </Field>
+      </div>
+      <label className="checkbox-row">
+        <input checked={signed} onChange={(event) => setSigned(event.target.checked)} type="checkbox" />
+        Guest has signed the registration card
+      </label>
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button
+          className="primary-button"
+          disabled={!idNumber || !signed}
+          onClick={() => onConfirm(reservation.id, { idNumber, vehicle, paymentMethod, amountReceived, signed })}
+          type="button"
+        >
+          Complete Check-In{amountReceived > 0 ? " & Issue Receipt" : " & Issue Key"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function CheckOutDrawer({
+  reservation,
+  orders,
+  onClose,
+  onConfirm,
+}: {
+  reservation: Reservation;
+  orders: PosOrder[];
+  onClose: () => void;
+  onConfirm: (id: string, details: { total: number; paymentMethod: PaymentMethod }) => void;
+}) {
+  const roomOrders = orders.filter((order) => order.guest === reservation.guest && order.payment === "Room Charge");
+  const accommodationBalance = reservation.balance;
+  const restaurantCharge = roomOrders.reduce((sum, order) => sum + order.total, 0);
+  const [otherCharges, setOtherCharges] = useState(0);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("Cash");
+  const total = accommodationBalance + restaurantCharge + otherCharges;
+
+  return (
+    <Drawer title={`Check Out - ${reservation.guest}`} description={`${reservation.id} - Room ${reservation.room}`} onClose={onClose}>
+      <div className="form-section">
+        <h3>Folio Summary</h3>
+        <div className="folio-line">
+          <span>Accommodation Balance Due</span>
+          <strong>{money.format(accommodationBalance)}</strong>
+        </div>
+        <div className="folio-line">
+          <span>Restaurant &amp; Bar (room charges)</span>
+          <strong>{money.format(restaurantCharge)}</strong>
+        </div>
+        <div className="folio-line">
+          <span>Other Charges (laundry, activities, etc.)</span>
+          <input type="number" min={0} value={otherCharges} onChange={(event) => setOtherCharges(Number(event.target.value))} />
+        </div>
+        <div className="folio-line total">
+          <span>Total Due</span>
+          <strong>{money.format(total)}</strong>
+        </div>
+      </div>
+
+      <div className="form-section">
+        <h3>Settlement</h3>
+        <Field label="Payment Method">
+          <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}>
+            <option>Cash</option>
+            <option>Ecocash</option>
+            <option>Bank Transfer</option>
+            <option>Card</option>
+          </select>
+        </Field>
+      </div>
+
+      <div className="sheet-footer">
+        <button className="primary-button" onClick={() => onConfirm(reservation.id, { total, paymentMethod })} type="button">
+          Settle &amp; Print Receipt
+        </button>
+      </div>
+    </Drawer>
+  );
+}
+
+function EnquiryModal({
+  onClose,
+  onCreate,
+}: {
+  onClose: () => void;
+  onCreate: (values: { source: Enquiry["source"]; guest: string; request: string; arrival: string; nextStep: string }) => void;
+}) {
+  const [source, setSource] = useState<Enquiry["source"]>("Telephone");
+  const [guest, setGuest] = useState("");
+  const [request, setRequest] = useState("");
+  const [arrival, setArrival] = useState(dates[0]);
+  const [nextStep, setNextStep] = useState("");
+
+  return (
+    <Modal title="New Enquiry" description="Capture telephone, WhatsApp, email or walk-in leads before they become reservations." onClose={onClose}>
+      <div className="form-grid">
+        <Field label="Source">
+          <select value={source} onChange={(event) => setSource(event.target.value as Enquiry["source"])}>
+            <option>Telephone</option>
+            <option>WhatsApp</option>
+            <option>Email</option>
+            <option>Walk-in</option>
+          </select>
+        </Field>
+        <Field label="Guest / Organisation">
+          <input value={guest} onChange={(event) => setGuest(event.target.value)} placeholder="Guest name" />
+        </Field>
+        <Field label="Requested Arrival">
+          <select value={arrival} onChange={(event) => setArrival(event.target.value)}>
+            {dates.map((date) => (
+              <option key={date} value={date}>
+                {date}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Follow-up / Next Step">
+          <input value={nextStep} onChange={(event) => setNextStep(event.target.value)} placeholder="e.g. Call back tomorrow" />
+        </Field>
+      </div>
+      <Field label="Request Details">
+        <textarea value={request} onChange={(event) => setRequest(event.target.value)} rows={3} placeholder="Accommodation, activities, conference, special requests" />
+      </Field>
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button
+          className="primary-button"
+          disabled={!guest || !request}
+          onClick={() => onCreate({ source, guest, request, arrival, nextStep: nextStep || "Awaiting first follow-up" })}
+          type="button"
+        >
+          Save Enquiry
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function KeyLogModal({
+  action,
+  rooms,
+  onClose,
+  onConfirm,
+}: {
+  action: KeyLog["action"];
+  rooms: Room[];
+  onClose: () => void;
+  onConfirm: (details: { room: string; reason: string; staff: string }) => void;
+}) {
+  const [room, setRoom] = useState(rooms[0]?.number ?? "");
+  const [reason, setReason] = useState("");
+  const [staff, setStaff] = useState("Reception");
+
+  return (
+    <Modal title={action} description="Every key movement must be logged per the front office manual." onClose={onClose}>
+      <div className="form-grid">
+        <Field label="Room">
+          <select value={room} onChange={(event) => setRoom(event.target.value)}>
+            {rooms.map((item) => (
+              <option key={item.id} value={item.number}>
+                {item.number}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Staff Member">
+          <input value={staff} onChange={(event) => setStaff(event.target.value)} />
+        </Field>
+      </div>
+      <Field label="Reason">
+        <input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="e.g. Guest checked in / Maintenance inspection" />
+      </Field>
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button className="primary-button" disabled={!reason} onClick={() => onConfirm({ room, reason, staff })} type="button">
+          Log {action}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function MessageModal({
+  onClose,
+  onCreate,
+}: {
+  onClose: () => void;
+  onCreate: (values: { guest: string; room: string; caller: string; message: string; status: GuestMessage["status"] }) => void;
+}) {
+  const [guest, setGuest] = useState("");
+  const [room, setRoom] = useState("");
+  const [caller, setCaller] = useState("");
+  const [message, setMessage] = useState("");
+  const [status, setStatus] = useState<GuestMessage["status"]>("Placed in Key Box");
+
+  return (
+    <Modal title="New Guest Message" description="Record telephone or counter messages exactly as the manual requires." onClose={onClose}>
+      <div className="form-grid">
+        <Field label="Guest Name">
+          <input value={guest} onChange={(event) => setGuest(event.target.value)} />
+        </Field>
+        <Field label="Room Number">
+          <input value={room} onChange={(event) => setRoom(event.target.value)} placeholder="Leave blank if not yet arrived" />
+        </Field>
+        <Field label="Caller Name">
+          <input value={caller} onChange={(event) => setCaller(event.target.value)} />
+        </Field>
+        <Field label="Status">
+          <select value={status} onChange={(event) => setStatus(event.target.value as GuestMessage["status"])}>
+            <option>Held for Arrival</option>
+            <option>Placed in Key Box</option>
+            <option>Delivered</option>
+          </select>
+        </Field>
+      </div>
+      <Field label="Message">
+        <textarea value={message} onChange={(event) => setMessage(event.target.value)} rows={3} />
+      </Field>
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button className="primary-button" disabled={!guest || !message} onClick={() => onCreate({ guest, room, caller, message, status })} type="button">
+          Save Message
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function ReceiptModal({ receipt, onClose }: { receipt: Receipt; onClose: () => void }) {
+  return (
+    <Modal description="Issued by Blue Hills Camp Front Office" onClose={onClose} title="Payment Receipt">
+      <div className="receipt-print">
+        <div className="receipt-head">
+          <strong>Blue Hills Camp</strong>
+          <span>Official Payment Receipt</span>
+        </div>
+        <div className="folio-line">
+          <span>Receipt No.</span>
+          <strong>{receipt.id}</strong>
+        </div>
+        <div className="folio-line">
+          <span>Reservation</span>
+          <strong>{receipt.reservationId}</strong>
+        </div>
+        <div className="folio-line">
+          <span>Guest</span>
+          <strong>{receipt.guest}</strong>
+        </div>
+        <div className="folio-line">
+          <span>Purpose</span>
+          <strong>{receipt.purpose}</strong>
+        </div>
+        <div className="folio-line">
+          <span>Payment Method</span>
+          <strong>{receipt.method}</strong>
+        </div>
+        <div className="folio-line total">
+          <span>Amount Received</span>
+          <strong>{money.format(receipt.amount)}</strong>
+        </div>
+        <div className="folio-line">
+          <span>Balance Remaining</span>
+          <strong>{money.format(receipt.balanceAfter)}</strong>
+        </div>
+        <div className="folio-line">
+          <span>Issued By</span>
+          <strong>
+            {receipt.issuedBy} at {receipt.time}
+          </strong>
+        </div>
+      </div>
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Close
+        </button>
+        <button className="primary-button" onClick={() => window.print()} type="button">
+          <Printer size={16} />
+          Print Receipt
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function HousekeepingChecklistDrawer({
+  rooms,
+  latestChecklist,
+  onClose,
+  onSave,
+}: {
+  rooms: Room[];
+  latestChecklist?: HousekeepingChecklist;
+  onClose: () => void;
+  onSave: (values: HousekeepingChecklistFormValues) => void;
+}) {
+  const [date, setDate] = useState(todayIsoDate());
+  const [submittedBy, setSubmittedBy] = useState("Housekeeping");
+  const [linen, setLinen] = useState<LinenCount[]>(latestChecklist?.linen ?? createDefaultLinen());
+  const [chemicals, setChemicals] = useState<ChemicalStockItem[]>(latestChecklist?.chemicals ?? createDefaultChemicals());
+  const [amenities, setAmenities] = useState<AmenityStockItem[]>(latestChecklist?.amenities ?? createDefaultAmenities());
+  const [roomStatuses, setRoomStatuses] = useState<RoomStatusSnapshot[]>(createRoomStatusesFromRooms(rooms));
+  const [notes, setNotes] = useState("");
+
+  const updateLinen = (index: number, field: "clean" | "dirty", value: number) => {
+    setLinen((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, [field]: value } : item)));
+  };
+
+  const updateChemical = (index: number, quantity: number) => {
+    setChemicals((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, quantity } : item)));
+  };
+
+  const updateAmenity = (index: number, quantity: number) => {
+    setAmenities((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, quantity } : item)));
+  };
+
+  const updateRoomStatus = (roomNumber: string, status: RoomStatus) => {
+    setRoomStatuses((current) => current.map((snapshot) => (snapshot.room === roomNumber ? { ...snapshot, status } : snapshot)));
+  };
+
+  const roomsByLodge = LODGE_ORDER.map((lodge) => ({
+    lodge,
+    snapshots: roomStatuses.filter((snapshot) => snapshot.lodge === lodge),
+  }));
+
+  return (
+    <Drawer
+      title="Daily Housekeeping Checklist"
+      description="Structured replacement for the WhatsApp/Excel daily report."
+      onClose={onClose}
+    >
+      <div className="form-grid">
+        <Field label="Checklist Date">
+          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+        </Field>
+        <Field label="Submitted By">
+          <input value={submittedBy} onChange={(event) => setSubmittedBy(event.target.value)} />
+        </Field>
+      </div>
+
+      <section className="checklist-section">
+        <h3>Clean & Dirty Linen</h3>
+        <table className="stock-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Clean Available</th>
+              <th>Dirty</th>
+              <th>Par Stock</th>
+              <th>Variance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {linen.map((item, index) => {
+              const variance = item.clean + item.dirty - item.parStock;
+              return (
+                <tr key={item.type} className={item.clean === 0 || variance !== 0 ? "stock-low" : ""}>
+                  <td>{item.type}</td>
+                  <td>
+                    <input
+                      className="stock-input"
+                      min={0}
+                      onChange={(event) => updateLinen(index, "clean", Number(event.target.value))}
+                      type="number"
+                      value={item.clean}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="stock-input"
+                      min={0}
+                      onChange={(event) => updateLinen(index, "dirty", Number(event.target.value))}
+                      type="number"
+                      value={item.dirty}
+                    />
+                  </td>
+                  <td>{item.parStock}</td>
+                  <td className={variance !== 0 ? "stock-low-cell" : ""}>{variance === 0 ? "OK" : variance > 0 ? `+${variance}` : variance}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="checklist-section">
+        <h3>Chemical Checklist</h3>
+        <table className="stock-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Quantity</th>
+              <th>Unit</th>
+              <th>Reorder Level</th>
+            </tr>
+          </thead>
+          <tbody>
+            {chemicals.map((item, index) => (
+              <tr key={item.name} className={item.quantity <= item.reorderLevel ? "stock-low" : ""}>
+                <td>{item.name}</td>
+                <td>
+                  <input
+                    className="stock-input"
+                    min={0}
+                    onChange={(event) => updateChemical(index, Number(event.target.value))}
+                    type="number"
+                    value={item.quantity}
+                  />
+                </td>
+                <td>{item.unit}</td>
+                <td>{item.reorderLevel}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="checklist-section">
+        <h3>Guest Amenities</h3>
+        <table className="stock-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Quantity</th>
+              <th>Reorder Level</th>
+            </tr>
+          </thead>
+          <tbody>
+            {amenities.map((item, index) => (
+              <tr key={item.name} className={item.quantity <= item.reorderLevel ? "stock-low" : ""}>
+                <td>{item.name}</td>
+                <td>
+                  <input
+                    className="stock-input"
+                    min={0}
+                    onChange={(event) => updateAmenity(index, Number(event.target.value))}
+                    type="number"
+                    value={item.quantity}
+                  />
+                </td>
+                <td>{item.reorderLevel}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="checklist-section">
+        <h3>Room Occupancy</h3>
+        <div className="lodge-grid">
+          {roomsByLodge.map(({ lodge, snapshots }) => (
+            <div className="lodge-section" key={lodge}>
+              <h4 className="lodge-heading">{lodge}</h4>
+              <table className="stock-table">
+                <thead>
+                  <tr>
+                    <th>Room</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {snapshots.map((snapshot) => (
+                    <tr key={snapshot.room}>
+                      <td>{snapshot.room}</td>
+                      <td>
+                        <select
+                          value={snapshot.status}
+                          onChange={(event) => updateRoomStatus(snapshot.room, event.target.value as RoomStatus)}
+                        >
+                          <option value="Occupied">Occupied</option>
+                          <option value="Available">Vacant</option>
+                          <option value="Dirty">Checkout</option>
+                          <option value="Staff">Staff</option>
+                          <option value="Maintenance">Maintenance</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <Field label="Notes (optional)">
+        <textarea onChange={(event) => setNotes(event.target.value)} rows={2} value={notes} />
+      </Field>
+
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button
+          className="primary-button"
+          disabled={!date || !submittedBy}
+          onClick={() =>
+            onSave({
+              date,
+              submittedBy,
+              linen,
+              chemicals,
+              amenities,
+              roomStatuses,
+              notes: notes || undefined,
+            })
+          }
+          type="button"
+        >
+          Submit Checklist
+        </button>
+      </div>
+    </Drawer>
+  );
+}
+
+function HousekeepingChecklistDetailModal({
+  checklist,
+  onClose,
+}: {
+  checklist: HousekeepingChecklist;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const whatsAppText = formatChecklistAsWhatsApp(checklist);
+  const alerts = computeStockAlerts(checklist);
+
+  const copySummary = async () => {
+    await navigator.clipboard.writeText(whatsAppText);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <Modal
+      title={`Housekeeping Checklist - ${formatChecklistDateLabel(checklist.date)}`}
+      description={`Submitted by ${checklist.submittedBy} at ${checklist.submittedAt}`}
+      onClose={onClose}
+    >
+      {alerts.length > 0 && (
+        <section className="checklist-section">
+          <h3>Alerts Detected</h3>
+          <div className="attention-list">
+            {alerts.map((alert) => (
+              <Attention key={`${alert.kind}-${alert.item}`} icon={Package} title={alert.item} description={alert.message} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="checklist-section">
+        <h3>Clean Linen Available</h3>
+        <table className="stock-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Clean</th>
+              <th>Dirty</th>
+              <th>Par Stock</th>
+            </tr>
+          </thead>
+          <tbody>
+            {checklist.linen.map((item) => (
+              <tr key={item.type} className={item.clean === 0 ? "stock-low" : ""}>
+                <td>{item.type}</td>
+                <td>{item.clean}</td>
+                <td>{item.dirty}</td>
+                <td>{item.parStock}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="checklist-section">
+        <h3>Chemicals</h3>
+        <table className="stock-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Quantity</th>
+              <th>Unit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {checklist.chemicals.map((item) => (
+              <tr key={item.name} className={item.quantity <= item.reorderLevel ? "stock-low" : ""}>
+                <td>{item.name}</td>
+                <td>{item.quantity}</td>
+                <td>{item.unit}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="checklist-section">
+        <h3>Guest Amenities</h3>
+        <table className="stock-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Quantity</th>
+            </tr>
+          </thead>
+          <tbody>
+            {checklist.amenities.map((item) => (
+              <tr key={item.name} className={item.quantity <= item.reorderLevel ? "stock-low" : ""}>
+                <td>{item.name}</td>
+                <td>{item.quantity}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="checklist-section">
+        <h3>Room Occupancy</h3>
+        <div className="lodge-grid">
+          {LODGE_ORDER.map((lodge) => {
+            const snapshots = checklist.roomStatuses.filter((snapshot) => snapshot.lodge === lodge);
+            if (snapshots.length === 0) return null;
+            return (
+              <div className="lodge-section" key={lodge}>
+                <h4 className="lodge-heading">{lodge}</h4>
+                <div className="stack">
+                  {snapshots.map((snapshot) => (
+                    <div className="task-card" key={snapshot.room}>
+                      <div>
+                        <strong>{snapshot.room}</strong>
+                        {snapshot.notes && <span>{snapshot.notes}</span>}
+                      </div>
+                      <Badge label={snapshot.status} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="checklist-section">
+        <h3>WhatsApp-style Summary</h3>
+        <pre className="whatsapp-export">{whatsAppText}</pre>
+      </section>
+
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Close
+        </button>
+        <button className="primary-button" onClick={copySummary} type="button">
+          <ClipboardCopy size={16} />
+          {copied ? "Copied!" : "Copy as WhatsApp Text"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+type SearchResult = {
+  key: string;
+  kind: string;
+  title: string;
+  subtitle: string;
+  onSelect: () => void;
+};
+
+function buildSearchResults(
+  state: DemoState,
+  term: string,
+  handlers: { goTo: (module: ModuleId) => void; openReservation: (id: string) => void },
+): SearchResult[] {
+  const query = term.trim().toLowerCase();
+  if (!query) return [];
+
+  const results: SearchResult[] = [];
+
+  state.reservations.forEach((reservation) => {
+    if (`${reservation.id} ${reservation.guest} ${reservation.organisation} ${reservation.room}`.toLowerCase().includes(query)) {
+      results.push({
+        key: `res-${reservation.id}`,
+        kind: "Reservation",
+        title: `${reservation.guest} - ${reservation.id}`,
+        subtitle: `Room ${reservation.room} - ${reservation.status}`,
+        onSelect: () => {
+          handlers.goTo("frontOffice");
+          handlers.openReservation(reservation.id);
+        },
+      });
+    }
+  });
+
+  state.rooms.forEach((room) => {
+    if (`${room.number} ${room.type}`.toLowerCase().includes(query)) {
+      results.push({
+        key: `room-${room.id}`,
+        kind: "Room",
+        title: `Room ${room.number}`,
+        subtitle: `${room.type} - ${room.status}`,
+        onSelect: () => handlers.goTo("frontOffice"),
+      });
+    }
+  });
+
+  state.enquiries.forEach((enquiry) => {
+    if (`${enquiry.id} ${enquiry.guest} ${enquiry.request}`.toLowerCase().includes(query)) {
+      results.push({
+        key: `enq-${enquiry.id}`,
+        kind: "Enquiry",
+        title: `${enquiry.guest} - ${enquiry.id}`,
+        subtitle: enquiry.request,
+        onSelect: () => handlers.goTo("frontOffice"),
+      });
+    }
+  });
+
+  state.purchaseRequests.forEach((request) => {
+    if (`${request.id} ${request.supplier} ${request.department}`.toLowerCase().includes(query)) {
+      results.push({
+        key: `pr-${request.id}`,
+        kind: "Purchase Request",
+        title: `${request.id} - ${request.supplier}`,
+        subtitle: request.description,
+        onSelect: () => handlers.goTo("procurement"),
+      });
+    }
+  });
+
+  state.activities.forEach((booking) => {
+    if (`${booking.id} ${booking.activity} ${booking.guest}`.toLowerCase().includes(query)) {
+      results.push({
+        key: `act-${booking.id}`,
+        kind: "Activity",
+        title: `${booking.activity} - ${booking.guest}`,
+        subtitle: `${booking.time} with ${booking.instructor}`,
+        onSelect: () => handlers.goTo("operations"),
+      });
+    }
+  });
+
+  return results.slice(0, 8);
+}
+
+function DensityChart({
+  rooms,
+  reservations,
+  highlightDate,
+}: {
+  rooms: Room[];
+  reservations: Reservation[];
+  highlightDate?: string;
+}) {
+  return (
+    <div className="density-chart">
+      <div className="density-row density-head">
+        <div className="room-label">Room</div>
+        {dates.map((date) => (
+          <div className={`date-cell ${date === highlightDate ? "date-cell-today" : ""}`} key={date}>
+            {date}
+          </div>
+        ))}
+      </div>
+      {rooms.map((room) => (
+        <div className="density-row" key={room.id}>
+          <div className="room-label">
+            <strong>{room.number}</strong>
+            <span>{room.lodge}</span>
+          </div>
+          {dates.map((date) => {
+            const reservation = reservations.find(
+              (item) => item.room === room.number && dates.indexOf(date) >= dates.indexOf(item.arrival) && dates.indexOf(date) < dates.indexOf(item.departure),
+            );
+            const showOperationalStatus = !reservation && date === highlightDate && room.status !== "Available";
+
+            return (
+              <div className={`date-cell ${date === highlightDate ? "date-cell-today" : ""}`} key={date}>
+                {reservation && (
+                  <div
+                    className={`booking-pill ${statusClass(reservation.status === "Checked In" ? "Checked In" : reservation.purpose === "Conference Group" ? "Conference Group" : reservation.payment)}`}
+                  >
+                    {reservation.guest}
+                  </div>
+                )}
+                {showOperationalStatus && (
+                  <div className={`booking-pill ${statusClass(room.status)}`}>{room.status === "Dirty" ? "Checkout" : room.status}</div>
+                )}
+                {!reservation && !showOperationalStatus && room.status === "Maintenance" && date === highlightDate && (
+                  <div className="booking-pill maintenance">Maintenance</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Badge({ label }: { label: string }) {
+  return <span className={`badge ${statusClass(label)}`}>{label}</span>;
+}
+
+function statusClass(label: string) {
+  return label.toLowerCase().replaceAll(" ", "-");
+}
+
+function Attention({ icon: Icon, title, description }: { icon: LucideIcon; title: string; description: string }) {
+  return (
+    <div className="attention-item">
+      <Icon size={18} />
+      <div>
+        <strong>{title}</strong>
+        <span>{description}</span>
+      </div>
+    </div>
+  );
+}
+
+function AuditList({ audit }: { audit: AuditItem[] }) {
+  return (
+    <div className="audit-list">
+      {audit.map((item) => (
+        <div className="audit-item" key={item.id}>
+          <span>{item.time}</span>
+          <strong>{item.text}</strong>
+          <em>{item.user}</em>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default App;

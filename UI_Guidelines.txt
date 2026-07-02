@@ -1,0 +1,885 @@
+# UI_GUIDELINES.md
+
+# Blue Hills Camp Hospitality ERP
+## User Interface & Experience Standards
+
+Version: 1.0
+
+Author: Ramcode Technologies
+
+---
+
+# PURPOSE
+
+This document defines the UI/UX standards for the Blue Hills Camp Hospitality ERP.
+
+It ensures every screen follows a consistent visual language, interaction model and navigation pattern.
+
+This document is intended for:
+
+- Claude Code
+- Cursor AI
+- UI Designers
+- Frontend Developers
+
+Every screen generated must comply with these standards.
+
+---
+
+# DESIGN PHILOSOPHY
+
+The system is Enterprise Software.
+
+It is NOT a marketing website.
+
+It is NOT a Bootstrap admin template.
+
+It is NOT a CRUD application.
+
+Users spend 8-10 hours every day using this software.
+
+The interface must therefore prioritise:
+
+• Speed
+
+• Simplicity
+
+• Clarity
+
+• Information Density
+
+• Consistency
+
+• Professionalism
+
+Think:
+
+Oracle Opera PMS
+
+Cloudbeds
+
+Mews
+
+Linear
+
+Stripe Dashboard
+
+Notion
+
+Microsoft Dynamics
+
+---
+
+# DESIGN GOALS
+
+Users should immediately know:
+
+Where they are
+
+What they are working on
+
+What requires attention
+
+What action comes next
+
+The software should reduce thinking.
+
+---
+
+# COLOUR PALETTE
+
+Primary
+
+Deep Navy Blue
+
+#0F4C81
+
+Secondary
+
+Luxury Gold
+
+#C9A227
+
+Success
+
+Green
+
+Paid
+
+Completed
+
+Available
+
+Warning
+
+Orange
+
+Deposit Paid
+
+Pending
+
+Attention
+
+Danger
+
+Red
+
+Outstanding
+
+Critical
+
+Cancelled
+
+Information
+
+Blue
+
+Checked In
+
+Active
+
+Neutral
+
+Grey
+
+Maintenance
+
+Disabled
+
+Background
+
+Very Light Grey
+
+Cards
+
+White
+
+---
+
+# TYPOGRAPHY
+
+Font
+
+Inter
+
+Headings
+
+Bold
+
+Large
+
+Readable
+
+Body
+
+Medium Weight
+
+Labels
+
+Semi Bold
+
+Never use tiny fonts.
+
+---
+
+# SPACING
+
+Use generous whitespace.
+
+Standard spacing
+
+8px
+
+16px
+
+24px
+
+32px
+
+Never cram information together.
+
+---
+
+# ICONS
+
+Use Lucide Icons only.
+
+Examples
+
+Home
+
+Calendar
+
+User
+
+Bed
+
+Restaurant
+
+Shopping Cart
+
+Package
+
+Settings
+
+Report
+
+Receipt
+
+Money
+
+Inventory
+
+Do not mix icon libraries.
+
+---
+
+# PAGE STRUCTURE
+
+Every page follows exactly the same layout.
+
+-------------------------------------------------
+
+Top Navigation
+
+-------------------------------------------------
+
+Breadcrumb
+
+-------------------------------------------------
+
+Page Title
+
+Page Description
+
+Primary Action Button
+
+-------------------------------------------------
+
+KPI Cards (Optional)
+
+-------------------------------------------------
+
+Filters
+
+-------------------------------------------------
+
+Search
+
+-------------------------------------------------
+
+Data Table
+
+-------------------------------------------------
+
+Pagination
+
+-------------------------------------------------
+
+---
+
+# SIDEBAR
+
+Left aligned.
+
+Collapsible.
+
+Contains
+
+Dashboard
+
+Front Office
+
+Accommodation
+
+Housekeeping
+
+Restaurant
+
+Kitchen
+
+Bar
+
+Activities
+
+Procurement
+
+Inventory
+
+Finance
+
+Reports
+
+Administration
+
+Icons always visible.
+
+Current module highlighted.
+
+---
+
+# TOP NAVIGATION
+
+Contains
+
+Search
+
+Notifications
+
+Current User
+
+Business Date
+
+Quick Actions
+
+Profile Menu
+
+---
+
+# BREADCRUMB
+
+Every screen must display navigation.
+
+Example
+
+Dashboard
+
+>
+
+Front Office
+
+>
+
+Reservations
+
+---
+
+# PAGE HEADER
+
+Always contains
+
+Page Title
+
+Short Description
+
+Primary Button
+
+Example
+
+Reservations
+
+Manage guest reservations and room allocations.
+
+[ New Reservation ]
+
+---
+
+# KPI CARDS
+
+Used on Dashboard screens.
+
+Card size
+
+Medium
+
+Rounded
+
+Large number
+
+Small description
+
+Optional trend
+
+Examples
+
+Today's Arrivals
+
+Occupancy %
+
+Outstanding Balance
+
+Revenue Today
+
+Activities Today
+
+---
+
+# TABLE DESIGN
+
+Tables are the primary component.
+
+Features
+
+Sorting
+
+Filtering
+
+Searching
+
+Pagination
+
+Column resize
+
+Sticky headers
+
+Status badges
+
+Clickable rows
+
+Hover effect
+
+Comfortable spacing
+
+Never use dense unreadable tables.
+
+---
+
+# STATUS BADGES
+
+Success
+
+Green
+
+Paid
+
+Available
+
+Completed
+
+Warning
+
+Orange
+
+Deposit Paid
+
+Pending
+
+Awaiting Approval
+
+Danger
+
+Red
+
+Outstanding
+
+Cancelled
+
+Overdue
+
+Information
+
+Blue
+
+Checked In
+
+Active
+
+Grey
+
+Maintenance
+
+Inactive
+
+Draft
+
+---
+
+# BUTTONS
+
+Primary
+
+Filled Blue
+
+Used once per page.
+
+Secondary
+
+Outline
+
+Neutral
+
+Danger
+
+Red
+
+Delete
+
+Ghost
+
+Minimal
+
+Toolbar buttons
+
+Buttons must never compete visually.
+
+---
+
+# FORMS
+
+Forms should be split into logical sections.
+
+Example
+
+Guest Information
+
+Accommodation
+
+Payment
+
+Notes
+
+Never present one giant form.
+
+---
+
+# INPUTS
+
+Rounded
+
+Clear labels
+
+Validation messages
+
+Helper text
+
+Placeholder
+
+Keyboard friendly
+
+---
+
+# DATE PICKERS
+
+Use calendar picker.
+
+Never require manual date typing.
+
+---
+
+# SEARCH
+
+Always visible.
+
+Search should support:
+
+Guests
+
+Reservations
+
+Invoices
+
+Rooms
+
+Purchase Orders
+
+Activities
+
+Suppliers
+
+Inventory
+
+---
+
+# FILTERS
+
+Placed above tables.
+
+Examples
+
+Date
+
+Status
+
+Department
+
+Room
+
+Payment
+
+Activity
+
+Supplier
+
+---
+
+# MODALS
+
+Use for
+
+Quick edits
+
+Confirmations
+
+Approvals
+
+Do NOT build full workflows inside modals.
+
+---
+
+# DRAWERS
+
+Use right-side drawers for
+
+Reservation Details
+
+Guest Profile
+
+Purchase Order
+
+Invoice Preview
+
+This keeps context visible.
+
+---
+
+# DASHBOARDS
+
+Every dashboard should contain
+
+Summary Cards
+
+Charts
+
+Recent Activity
+
+Alerts
+
+Quick Actions
+
+Recent Transactions
+
+Never use empty whitespace.
+
+---
+
+# CHARTS
+
+Use Recharts.
+
+Minimal style.
+
+No bright colours.
+
+Maximum two colours per chart.
+
+---
+
+# CALENDAR
+
+Reservations
+
+Occupancy
+
+Activities
+
+Conference Bookings
+
+Should resemble Oracle Opera PMS.
+
+Support drag and drop.
+
+---
+
+# OCCUPANCY DENSITY CHART
+
+One of the flagship screens.
+
+Rooms vertically.
+
+Dates horizontally.
+
+Bookings span multiple days.
+
+Colour Coding
+
+Green
+
+Paid
+
+Orange
+
+Deposit
+
+Red
+
+Outstanding
+
+Blue
+
+Checked In
+
+Grey
+
+Maintenance
+
+Purple
+
+Conference Group
+
+Allow
+
+Drag
+
+Resize
+
+Move
+
+Hover
+
+Click
+
+This screen should impress hotel managers immediately.
+
+---
+
+# EMPTY STATES
+
+Every table should have an elegant empty state.
+
+Example
+
+"No reservations found."
+
+Button
+
+Create Reservation
+
+---
+
+# LOADING STATES
+
+Use Skeleton Loaders.
+
+Never use spinning wheels unless absolutely necessary.
+
+---
+
+# ERROR STATES
+
+Friendly.
+
+Explain the problem.
+
+Provide retry button.
+
+---
+
+# NOTIFICATIONS
+
+Notification Centre
+
+Upcoming Arrivals
+
+Outstanding Payments
+
+Low Stock
+
+Maintenance Alerts
+
+Approvals
+
+Conference Reminders
+
+---
+
+# PRINTING
+
+Every printable document should have
+
+Print Preview
+
+PDF Export
+
+A4 Layout
+
+Receipt Printer Support
+
+---
+
+# RESPONSIVENESS
+
+Primary target
+
+1920x1080
+
+Support
+
+1600x900
+
+1366x768
+
+Mobile is NOT the priority.
+
+Desktop experience comes first.
+
+---
+
+# ACCESSIBILITY
+
+High contrast
+
+Keyboard navigation
+
+Visible focus
+
+Readable fonts
+
+Large click targets
+
+---
+
+# MICRO INTERACTIONS
+
+Subtle only.
+
+Hover
+
+Fade
+
+Slide
+
+Soft transitions
+
+No excessive animation.
+
+---
+
+# USER EXPERIENCE PRINCIPLES
+
+Reception staff should complete a reservation in under 2 minutes.
+
+Restaurant staff should complete an order in under 30 seconds.
+
+Housekeeping should update room status in under 10 seconds.
+
+Managers should obtain any report within 3 clicks.
+
+The system should minimise typing wherever possible.
+
+---
+
+# DESIGN RULES FOR CLAUDE CODE
+
+When generating UI:
+
+Never create generic admin dashboards.
+
+Always think like enterprise software.
+
+Prioritise usability over visual effects.
+
+Use realistic hospitality data.
+
+Maintain consistent spacing.
+
+Reuse components.
+
+Use shadcn/ui components wherever possible.
+
+Prefer drawers over navigating away.
+
+Keep important actions visible.
+
+Every page must look presentation-ready.
+
+If unsure, favour simplicity over decoration.

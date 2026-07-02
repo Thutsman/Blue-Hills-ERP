@@ -1,0 +1,823 @@
+# PROJECT_CONTEXT.md
+
+# Blue Hills Camp Hospitality ERP
+
+Version: 1.0
+
+Status: Discovery Phase
+
+Author: Ramcode Technologies
+
+Last Updated: July 2026
+
+---
+
+# 1. PROJECT OVERVIEW
+
+Blue Hills Camp Hospitality ERP is an enterprise hospitality management system being designed specifically for Blue Hills Camp, Zimbabwe.
+
+The objective is NOT to change how Blue Hills Camp operates.
+
+The objective is to digitize the camp's existing operational procedures while improving efficiency, reporting, accountability and management visibility.
+
+The software must replace:
+
+• Paper registers
+• Paper purchase orders
+• Paper guest records
+• Manual calculations
+• Excel spreadsheets
+• Manual reporting
+
+without disrupting existing business processes.
+
+The final system should become the central operating platform for the entire camp.
+
+---
+
+# 2. BUSINESS BACKGROUND
+
+Blue Hills Camp operates as an integrated hospitality establishment providing:
+
+• Accommodation
+• Restaurant
+• Bar
+• Outdoor Activities
+• Conference Facilities
+• Weddings
+• Team Building
+• Corporate Retreats
+• School Camps
+
+The camp currently manages operations using:
+
+• Paper forms
+• Excel spreadsheets
+• Printed manuals
+• Manual approvals
+
+Each department maintains its own records independently.
+
+This causes duplicated work and delays in management reporting.
+
+---
+
+# 3. PROJECT GOALS
+
+The software should achieve the following:
+
+Digitize all operational departments.
+
+Provide real-time reporting.
+
+Reduce paperwork.
+
+Reduce duplicate data capture.
+
+Improve guest experience.
+
+Improve inventory control.
+
+Improve procurement accountability.
+
+Improve financial reporting.
+
+Provide management dashboards.
+
+Maintain complete audit trails.
+
+Operate completely without internet.
+
+---
+
+# 4. NON-NEGOTIABLE REQUIREMENTS
+
+## OFFLINE FIRST
+
+This system MUST continue operating even if internet connectivity is unavailable.
+
+Internet is considered OPTIONAL.
+
+All critical operations must function locally.
+
+Examples:
+
+✔ Reservations
+
+✔ Check-in
+
+✔ Check-out
+
+✔ Restaurant POS
+
+✔ Activities
+
+✔ Procurement
+
+✔ Inventory
+
+✔ Finance
+
+✔ Reporting
+
+No module should require cloud services.
+
+---
+
+# LOCAL NETWORK
+
+The system should support multiple computers connected over a Local Area Network (LAN).
+
+Example:
+
+Reception
+
+Restaurant
+
+Kitchen
+
+Accounts
+
+Manager
+
+Stores
+
+Maintenance
+
+All users connect to one local server.
+
+---
+
+# BACKUPS
+
+Automatic local backups.
+
+External drive backups.
+
+Optional cloud backup whenever internet becomes available.
+
+---
+
+# 5. TARGET USERS
+
+Receptionists
+
+Managers
+
+Directors
+
+Accounts
+
+Kitchen Staff
+
+Restaurant Staff
+
+Bartenders
+
+Housekeeping
+
+Maintenance
+
+Stores Personnel
+
+Procurement Officer
+
+Outdoor Activities Team
+
+Sales & Marketing
+
+System Administrator
+
+---
+
+# 6. CURRENT BUSINESS PROCESSES
+
+Blue Hills Camp currently operates through paper forms and Excel templates.
+
+These templates are NOT temporary.
+
+They represent official business processes.
+
+The software should digitize these workflows.
+
+Never redesign workflows without business approval.
+
+---
+
+# 7. EXISTING DEPARTMENTS
+
+The ERP consists of the following operational departments.
+
+## Front Office
+
+Responsibilities
+
+Reservations
+
+Guest enquiries
+
+Guest quotations
+
+Check-in
+
+Check-out
+
+Room allocation
+
+Guest accounts
+
+Occupancy planning
+
+Night audit
+
+Guest history
+
+Reports
+
+---
+
+## Accommodation
+
+Room Types
+
+Room Rates
+
+Room Status
+
+Room Maintenance
+
+Room Availability
+
+Occupancy
+
+---
+
+## Housekeeping
+
+Cleaning schedules
+
+Inspection checklists
+
+Laundry
+
+Lost & Found
+
+Maintenance requests
+
+Room readiness
+
+---
+
+## Restaurant
+
+Restaurant POS
+
+Table service
+
+Guest room charging
+
+Bills
+
+Payments
+
+Kitchen communication
+
+---
+
+## Kitchen
+
+Food preparation
+
+Kitchen orders
+
+Recipe management
+
+Kitchen production
+
+Food costing
+
+---
+
+## Bar
+
+POS
+
+Inventory
+
+Daily stock counts
+
+Transfers
+
+Stock reconciliation
+
+---
+
+## Outdoor Activities
+
+Zipline
+
+Quad Bike
+
+Paintball
+
+Mini Golf
+
+Swimming
+
+Archery
+
+Obstacle Course
+
+Mountain Bike
+
+Equipment management
+
+Instructor scheduling
+
+Participant management
+
+---
+
+## Procurement
+
+Purchase Requests
+
+Approvals
+
+Purchase Orders
+
+Supplier purchases
+
+Receipt attachment
+
+Goods received
+
+---
+
+## Stores
+
+Inventory
+
+Goods received
+
+Stock movement
+
+Stock issues
+
+Stock adjustments
+
+Reorder levels
+
+---
+
+## Maintenance
+
+Maintenance requests
+
+Job assignments
+
+Repairs
+
+Preventive maintenance
+
+Room maintenance
+
+Equipment maintenance
+
+---
+
+## Finance
+
+Invoices
+
+Payments
+
+Cash Summary
+
+Revenue
+
+Expenses
+
+Financial reports
+
+Outstanding balances
+
+---
+
+## Administration
+
+Users
+
+Roles
+
+Permissions
+
+Audit Logs
+
+Settings
+
+---
+
+# 8. EXCEL TEMPLATE KNOWLEDGE
+
+Every workbook currently used by Blue Hills Camp represents an approved operational procedure.
+
+The software should replace each workbook with a digital module.
+
+---
+
+## FRONT OFFICE DENSITY CHART
+
+Purpose
+
+Accommodation planning.
+
+Used by
+
+Reception.
+
+Tracks
+
+Room occupancy.
+
+Room availability.
+
+Arrivals.
+
+Departures.
+
+Paid bookings.
+
+Outstanding bookings.
+
+Conference groups.
+
+Blocked rooms.
+
+Maintenance rooms.
+
+Colour Coding
+
+Green
+
+Paid.
+
+Orange
+
+Deposit received.
+
+Red
+
+Outstanding payment.
+
+Blue
+
+Checked In.
+
+Grey
+
+Maintenance.
+
+Purple
+
+Conference booking.
+
+Future Module
+
+Occupancy Planner.
+
+---
+
+## FRONT OFFICE DAILY SCHEDULE
+
+Purpose
+
+Lead management.
+
+Tracks
+
+Telephone enquiries.
+
+WhatsApp enquiries.
+
+Email enquiries.
+
+Walk-in guests.
+
+Quotations.
+
+Booking confirmations.
+
+Cancelled enquiries.
+
+Follow-ups.
+
+Lost business.
+
+Future Module
+
+Enquiry CRM.
+
+---
+
+## DAILY ACTIVITIES
+
+Purpose
+
+Daily activity bookings.
+
+Tracks
+
+Participants.
+
+Activities.
+
+Operators.
+
+Payments.
+
+Future Module
+
+Activities Scheduler.
+
+---
+
+## PAINTBALL DAILY SCHEDULE
+
+Purpose
+
+Equipment accountability.
+
+Tracks
+
+Masks.
+
+Guns.
+
+Overalls.
+
+Store quantities.
+
+Field quantities.
+
+Damaged equipment.
+
+Operators.
+
+Future Module
+
+Activity Equipment Management.
+
+---
+
+## QUAD BIKE SCHEDULE
+
+Purpose
+
+Daily quad bike bookings.
+
+Tracks
+
+Guests.
+
+Instructor.
+
+Equipment.
+
+Times.
+
+Future Module
+
+Quad Bike Scheduler.
+
+---
+
+## HOUSEKEEPING DAILY SCHEDULE
+
+Purpose
+
+Room inspections.
+
+Tracks
+
+Cleaning.
+
+Inspection.
+
+Maintenance.
+
+Laundry.
+
+Future Module
+
+Housekeeping Operations.
+
+---
+
+## DAILY MAINTENANCE SCHEDULE
+
+Purpose
+
+Maintenance planning.
+
+Tracks
+
+Tasks.
+
+Assigned staff.
+
+Status.
+
+Completion.
+
+Future Module
+
+Maintenance Management.
+
+---
+
+## DAILY BAR STOCK
+
+Purpose
+
+Daily stock reconciliation.
+
+Tracks
+
+Opening stock.
+
+Closing stock.
+
+Sales.
+
+Variance.
+
+Future Module
+
+Bar Inventory.
+
+---
+
+## STORES STOCK MOVEMENT
+
+Purpose
+
+Inventory management.
+
+Tracks
+
+Goods received.
+
+Goods issued.
+
+Department transfers.
+
+Stock balances.
+
+Future Module
+
+Inventory Control.
+
+---
+
+## PURCHASE ORDERS
+
+Current Process
+
+Department raises request.
+
+↓
+
+Manager approves.
+
+↓
+
+Procurement Officer travels to town.
+
+↓
+
+Purchases goods.
+
+↓
+
+Supplier issues receipt.
+
+↓
+
+Receipt is stapled to Purchase Order.
+
+↓
+
+Goods received by Stores.
+
+↓
+
+Finance files documents.
+
+System Requirement
+
+Digitize the entire workflow while allowing scanned receipts to be attached to Purchase Orders.
+
+---
+
+## FINANCE REPORT
+
+Purpose
+
+Daily management reporting.
+
+Tracks
+
+Accommodation Revenue.
+
+Restaurant Revenue.
+
+Activities Revenue.
+
+Expenses.
+
+Cash.
+
+Bank.
+
+Outstanding balances.
+
+Future Module
+
+Executive Finance Dashboard.
+
+---
+
+# 9. DESIGN PHILOSOPHY
+
+The system is NOT a website.
+
+The system is enterprise software.
+
+Inspiration
+
+Oracle Opera PMS
+
+Cloudbeds
+
+Mews
+
+Notion
+
+Linear
+
+Stripe Dashboard
+
+Avoid
+
+Bootstrap Admin Templates
+
+Generic CRM layouts
+
+Marketing website aesthetics
+
+---
+
+# 10. UI PRINCIPLES
+
+Desktop first.
+
+Minimal clicks.
+
+Fast navigation.
+
+Large tables.
+
+Keyboard shortcuts.
+
+Touch-friendly POS.
+
+Consistent spacing.
+
+White cards.
+
+Subtle shadows.
+
+Enterprise typography.
+
+Professional colour palette.
+
+---
+
+# 11. FUTURE ROADMAP
+
+After Blue Hills implementation the software should become a generic Hospitality ERP suitable for:
+
+Hotels
+
+Lodges
+
+Safari Camps
+
+Guest Houses
+
+Conference Centres
+
+Holiday Resorts
+
+The system architecture should therefore remain configurable and avoid hardcoding Blue Hills-specific terminology wherever possible.

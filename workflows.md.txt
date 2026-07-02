@@ -1,0 +1,975 @@
+# WORKFLOWS.md
+
+# Blue Hills Camp Hospitality ERP
+## Business Workflow Specification
+
+Version: 1.0
+
+---
+
+# PURPOSE
+
+This document describes every business workflow currently used by Blue Hills Camp.
+
+The purpose of the software is to digitize these workflows without fundamentally changing the operational procedures.
+
+Every workflow below must eventually be supported by the Hospitality ERP.
+
+---
+
+# GENERAL PRINCIPLES
+
+• Every transaction must have an audit trail.
+
+• Every workflow should record:
+    - User
+    - Date
+    - Time
+    - Status
+    - Department
+
+• Managers should approve where required.
+
+• Every workflow should support printing.
+
+• Every workflow should support PDF export.
+
+---
+
+# WORKFLOW 1
+
+# Guest Enquiry
+
+Purpose
+
+Capture all enquiries before they become reservations.
+
+Current Process
+
+Telephone
+
+WhatsApp
+
+Email
+
+Walk-in
+
+↓
+
+Reception captures enquiry in Excel
+
+↓
+
+Quotation prepared
+
+↓
+
+Follow-up
+
+↓
+
+Reservation confirmed or enquiry closed
+
+Future Workflow
+
+Guest contacts Blue Hills
+
+↓
+
+Reception selects
+
+New Enquiry
+
+↓
+
+Capture
+
+Guest Name
+
+Phone
+
+Email
+
+Organisation
+
+Arrival Date
+
+Departure Date
+
+Number of Guests
+
+Accommodation Required
+
+Activities Required
+
+Conference Required
+
+Special Requests
+
+↓
+
+Save
+
+↓
+
+Generate Quotation
+
+↓
+
+Quotation emailed or printed
+
+↓
+
+Status becomes
+
+Quotation Sent
+
+↓
+
+Follow-up reminder generated
+
+↓
+
+Client accepts quotation
+
+↓
+
+Reservation created
+
+OR
+
+Client declines
+
+↓
+
+Mark enquiry as Lost
+
+Workflow Status
+
+New
+
+Quoted
+
+Follow-up
+
+Confirmed
+
+Cancelled
+
+Lost
+
+---
+
+# WORKFLOW 2
+
+# Reservation
+
+Purpose
+
+Reserve accommodation.
+
+Workflow
+
+Create Reservation
+
+↓
+
+Search Guest
+
+↓
+
+Existing Guest
+
+or
+
+New Guest
+
+↓
+
+Select Dates
+
+↓
+
+Check Availability
+
+↓
+
+Select Room
+
+↓
+
+Calculate Charges
+
+↓
+
+Capture Deposit
+
+↓
+
+Generate Reservation Number
+
+↓
+
+Confirmation Letter
+
+↓
+
+Reservation Saved
+
+Status
+
+Tentative
+
+Confirmed
+
+Guaranteed
+
+Cancelled
+
+No Show
+
+Checked In
+
+---
+
+# WORKFLOW 3
+
+# Occupancy Planning (Density Chart)
+
+Purpose
+
+Visual room planning.
+
+Used By
+
+Reception.
+
+Workflow
+
+Reservation Created
+
+↓
+
+Booking appears on Density Chart
+
+↓
+
+Colour determined by payment status
+
+↓
+
+Reception may drag booking
+
+↓
+
+Room changes automatically updated
+
+↓
+
+Guest checks in
+
+↓
+
+Colour changes
+
+↓
+
+Guest checks out
+
+↓
+
+Booking archived
+
+Colour Rules
+
+Green
+
+Paid
+
+Orange
+
+Deposit Paid
+
+Red
+
+Outstanding
+
+Blue
+
+Checked In
+
+Grey
+
+Maintenance
+
+Purple
+
+Conference Group
+
+---
+
+# WORKFLOW 4
+
+# Guest Check-In
+
+Workflow
+
+Reservation Selected
+
+↓
+
+Verify Guest
+
+↓
+
+Capture ID
+
+↓
+
+Capture Vehicle
+
+↓
+
+Assign Room
+
+↓
+
+Issue Key
+
+↓
+
+Print Registration Card
+
+↓
+
+Guest Signs
+
+↓
+
+Room Status
+
+Occupied
+
+↓
+
+Booking Status
+
+Checked In
+
+---
+
+# WORKFLOW 5
+
+# Guest Check-Out
+
+Workflow
+
+Guest requests checkout
+
+↓
+
+Calculate Bill
+
+Accommodation
+
+Restaurant
+
+Bar
+
+Activities
+
+Laundry
+
+Other Charges
+
+↓
+
+Payments
+
+↓
+
+Outstanding Balance
+
+↓
+
+Generate Invoice
+
+↓
+
+Print Receipt
+
+↓
+
+Room Status
+
+Dirty
+
+↓
+
+Housekeeping notified
+
+↓
+
+Booking Closed
+
+---
+
+# WORKFLOW 6
+
+# Housekeeping
+
+Workflow
+
+Room becomes Dirty
+
+↓
+
+Housekeeping Queue
+
+↓
+
+Housekeeper Assigned
+
+↓
+
+Room Cleaned
+
+↓
+
+Inspection
+
+↓
+
+Pass
+
+↓
+
+Room Available
+
+OR
+
+Fail
+
+↓
+
+Return for Cleaning
+
+Maintenance Issues
+
+↓
+
+Maintenance Request created
+
+---
+
+# WORKFLOW 7
+
+# Maintenance
+
+Workflow
+
+Issue Reported
+
+↓
+
+Maintenance Request
+
+↓
+
+Assign Technician
+
+↓
+
+In Progress
+
+↓
+
+Completed
+
+↓
+
+Manager Verification
+
+↓
+
+Closed
+
+Priority
+
+Low
+
+Medium
+
+High
+
+Emergency
+
+---
+
+# WORKFLOW 8
+
+# Restaurant Order
+
+Workflow
+
+Waiter logs in
+
+↓
+
+Select Table
+
+↓
+
+Select Guest
+
+↓
+
+Take Order
+
+↓
+
+Send to Kitchen
+
+↓
+
+Kitchen prepares food
+
+↓
+
+Order Ready
+
+↓
+
+Waiter serves
+
+↓
+
+Bill generated
+
+↓
+
+Payment
+
+Cash
+
+Card
+
+Room Charge
+
+↓
+
+Receipt printed
+
+---
+
+# WORKFLOW 9
+
+# Kitchen
+
+Workflow
+
+Restaurant Order
+
+↓
+
+Kitchen Display
+
+↓
+
+Chef accepts
+
+↓
+
+Preparing
+
+↓
+
+Ready
+
+↓
+
+Waiter notified
+
+↓
+
+Completed
+
+---
+
+# WORKFLOW 10
+
+# Activities Booking
+
+Workflow
+
+Guest books activity
+
+↓
+
+Select Activity
+
+↓
+
+Check Availability
+
+↓
+
+Assign Instructor
+
+↓
+
+Assign Equipment
+
+↓
+
+Payment
+
+↓
+
+Booking Confirmed
+
+↓
+
+Participant attends
+
+↓
+
+Equipment Returned
+
+↓
+
+Booking Closed
+
+---
+
+# WORKFLOW 11
+
+# Purchase Request
+
+Workflow
+
+Department
+
+↓
+
+Create Purchase Request
+
+↓
+
+Manager Approval
+
+↓
+
+Purchase Order Generated
+
+↓
+
+Procurement Officer
+
+↓
+
+Purchase Goods
+
+↓
+
+Supplier Receipt
+
+↓
+
+Receipt Attached
+
+↓
+
+Goods Received
+
+↓
+
+Inventory Updated
+
+↓
+
+Finance Verification
+
+↓
+
+Closed
+
+---
+
+# WORKFLOW 12
+
+# Goods Received
+
+Workflow
+
+Supplier Delivery
+
+↓
+
+Stores verifies quantity
+
+↓
+
+Verify Purchase Order
+
+↓
+
+Goods Received Note
+
+↓
+
+Stock Updated
+
+↓
+
+Purchase Order Closed
+
+---
+
+# WORKFLOW 13
+
+# Inventory Issue
+
+Workflow
+
+Department requests stock
+
+↓
+
+Stores Approval
+
+↓
+
+Issue Stock
+
+↓
+
+Stock Reduced
+
+↓
+
+Department Consumption Recorded
+
+---
+
+# WORKFLOW 14
+
+# Bar Stock
+
+Workflow
+
+Opening Count
+
+↓
+
+Sales
+
+↓
+
+Transfers
+
+↓
+
+Closing Count
+
+↓
+
+Variance Calculation
+
+↓
+
+Manager Approval
+
+---
+
+# WORKFLOW 15
+
+# Conference Booking
+
+Workflow
+
+Enquiry
+
+↓
+
+Quotation
+
+↓
+
+Booking
+
+↓
+
+Conference Schedule
+
+↓
+
+Accommodation Allocation
+
+↓
+
+Meal Planning
+
+↓
+
+Activities Planning
+
+↓
+
+BOQ Generated
+
+↓
+
+Procurement
+
+↓
+
+Conference Delivered
+
+↓
+
+Final Invoice
+
+---
+
+# WORKFLOW 16
+
+# Finance
+
+Workflow
+
+Department Transactions
+
+↓
+
+Daily Revenue
+
+↓
+
+Expenses
+
+↓
+
+Cash Summary
+
+↓
+
+Manager Review
+
+↓
+
+Daily Finance Report
+
+↓
+
+Archived
+
+---
+
+# WORKFLOW 17
+
+# Night Audit
+
+Performed by Reception.
+
+Workflow
+
+Verify Check-ins
+
+↓
+
+Verify Check-outs
+
+↓
+
+Verify Payments
+
+↓
+
+Verify Restaurant Sales
+
+↓
+
+Verify Activities Revenue
+
+↓
+
+Verify Cash
+
+↓
+
+Generate Reports
+
+↓
+
+Close Business Day
+
+↓
+
+Open Next Business Day
+
+---
+
+# WORKFLOW 18
+
+# Reporting
+
+Reports
+
+Occupancy
+
+Revenue
+
+Restaurant Sales
+
+Activities Revenue
+
+Procurement
+
+Inventory
+
+Maintenance
+
+Cash Summary
+
+Finance
+
+User Activity
+
+Audit Trail
+
+Reports may be
+
+Viewed
+
+Printed
+
+PDF
+
+Excel
+
+Scheduled
+
+---
+
+# FUTURE WORKFLOWS
+
+Online Reservations
+
+WhatsApp Integration
+
+SMS Notifications
+
+Email Automation
+
+Accounting Integration
+
+Mobile Housekeeping
+
+QR Code Check-in
+
+Digital Guest Signature
+
+Self-Service Kiosk
+
+Management Mobile App
