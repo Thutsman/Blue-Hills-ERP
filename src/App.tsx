@@ -14,10 +14,12 @@ import {
   KeyRound,
   LayoutDashboard,
   LogOut,
+  Menu,
   Package,
   Plus,
   Printer,
   Receipt,
+  RotateCcw,
   Search,
   Settings,
   ShieldCheck,
@@ -957,6 +959,7 @@ function useLocalDemoState() {
 
 function App() {
   const [activeModule, setActiveModule] = useState<ModuleId>("dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { state, save, withAudit } = useLocalDemoState();
 
   const totals = useMemo(() => {
@@ -1432,13 +1435,18 @@ function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
+
+      <aside className={sidebarOpen ? "sidebar open" : "sidebar"}>
         <div className="brand">
           <div className="brand-mark">BH</div>
           <div>
             <strong>Blue Hills</strong>
             <span>Hospitality ERP</span>
           </div>
+          <button className="sidebar-close" onClick={() => setSidebarOpen(false)} type="button" aria-label="Close navigation menu">
+            <X size={18} />
+          </button>
         </div>
 
         <nav className="nav-list">
@@ -1448,7 +1456,10 @@ function App() {
               <button
                 className={activeModule === item.id ? "nav-item active" : "nav-item"}
                 key={item.id}
-                onClick={() => setActiveModule(item.id)}
+                onClick={() => {
+                  setActiveModule(item.id);
+                  setSidebarOpen(false);
+                }}
                 type="button"
               >
                 <Icon size={18} />
@@ -1469,6 +1480,9 @@ function App() {
 
       <main className="workspace">
         <header className="topbar">
+          <button className="menu-toggle" onClick={() => setSidebarOpen(true)} type="button" aria-label="Open navigation menu">
+            <Menu size={20} />
+          </button>
           <div className="global-search">
             <Search size={18} />
             <input
@@ -1498,16 +1512,17 @@ function App() {
             )}
           </div>
           <div className="topbar-actions">
-            <button className="ghost-button" type="button">
+            <button className="ghost-button" type="button" aria-label={`${state.audit.length} alerts`}>
               <Bell size={17} />
-              {state.audit.length} Alerts
+              <span className="label-text">{state.audit.length} Alerts</span>
             </button>
-            <button className="ghost-button" type="button">
+            <button className="ghost-button" type="button" aria-label="Business date: 02 Jul 2026">
               <CalendarDays size={17} />
-              Business Date: 02 Jul 2026
+              <span className="label-text">Business Date: 02 Jul 2026</span>
             </button>
-            <button className="primary-button small" onClick={resetDemo} type="button">
-              Reset Demo
+            <button className="primary-button small" onClick={resetDemo} type="button" aria-label="Reset demo data">
+              <RotateCcw size={15} />
+              <span className="label-text">Reset Demo</span>
             </button>
           </div>
         </header>
