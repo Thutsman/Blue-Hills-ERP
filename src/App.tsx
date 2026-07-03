@@ -3677,6 +3677,124 @@ function App() {
   );
 }
 
+function downloadHtmlFile(filename: string, html: string) {
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function buildManagerPackHtml(
+  state: DemoState,
+  totals: { occupancy: number; arrivals: number; revenue: number; outstanding: number },
+  metrics: DashboardMetrics,
+  attentionItems: Array<{ key: string; title: string; description: string }>,
+): string {
+  const kpiRows: Array<[string, string]> = [
+    ["Occupancy", `${totals.occupancy}% (${metrics.roomSummary.occupied} of ${state.rooms.length} rooms)`],
+    ["Tomorrow's Arrivals", `${totals.arrivals} (${metrics.arrivalsToday.length} arriving today)`],
+    ["Revenue Today", money.format(totals.revenue)],
+    ["Outstanding Balances", money.format(totals.outstanding)],
+    ["Activities Today", `${metrics.activitiesToday.length} booked, ${money.format(metrics.activitiesRevenueToday)}`],
+    ["Restaurant Today", `${state.orders.length} orders, ${money.format(metrics.restaurantRevenueToday)} in sales`],
+    ["Procurement Spend", `${money.format(metrics.procurementSpend)} (${metrics.outstandingPOs} PO(s) outstanding)`],
+    ["Inventory Value", `${money.format(metrics.totalInventoryValue)} (${metrics.lowStockCount} item(s) low stock)`],
+    ["Business Day", `${metrics.businessDayClosed ? "Closed" : "Trading"} - expenses today ${money.format(metrics.expensesToday)}`],
+  ];
+
+  const guestList = (label: string, reservations: Reservation[]) =>
+    reservations.length === 0
+      ? `<tr><td>${escapeHtml(label)}</td><td colspan="2" class="muted">None</td></tr>`
+      : reservations
+          .map(
+            (reservation, index) =>
+              `<tr><td>${index === 0 ? escapeHtml(label) : ""}</td><td>${escapeHtml(reservation.guest)}</td><td>${escapeHtml(reservation.room)}</td></tr>`,
+          )
+          .join("");
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Blue Hills Camp - Manager Pack - ${businessDateLabel}</title>
+<style>
+  body { font-family: Inter, Arial, sans-serif; color: #142033; margin: 32px; }
+  h1 { color: #0f4c81; margin-bottom: 4px; }
+  h2 { color: #0f4c81; border-bottom: 2px solid #c9a227; padding-bottom: 4px; margin-top: 32px; }
+  .eyebrow { color: #c9a227; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; font-size: 13px; }
+  .subtitle { color: #667085; margin-top: 0; }
+  table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+  th, td { border-bottom: 1px solid #e5ebf2; padding: 8px 10px; text-align: left; font-size: 14px; }
+  th { background: #f8fafc; color: #536071; text-transform: uppercase; font-size: 12px; }
+  td.muted { color: #667085; }
+  .attention-title { font-weight: 700; }
+  .attention-desc { color: #667085; font-size: 13px; }
+  @media print { body { margin: 12px; } }
+</style>
+</head>
+<body>
+  <div class="eyebrow">Blue Hills Camp</div>
+  <h1>Executive Manager Pack</h1>
+  <p class="subtitle">Business date ${businessDateLabel} - generated ${nowTime()}</p>
+
+  <h2>Key Metrics</h2>
+  <table>
+    <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+    <tbody>
+      ${kpiRows.map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join("\n      ")}
+    </tbody>
+  </table>
+
+  <h2>Front Office Today</h2>
+  <table>
+    <thead><tr><th>Category</th><th>Guest</th><th>Room</th></tr></thead>
+    <tbody>
+      ${guestList("Arrivals", metrics.arrivalsToday)}
+      ${guestList("In-House", metrics.inHouseGuests)}
+      ${guestList("Departures", metrics.departuresToday)}
+    </tbody>
+  </table>
+
+  <h2>Attention Queue (${attentionItems.length})</h2>
+  <table>
+    <thead><tr><th>Item</th><th>Detail</th></tr></thead>
+    <tbody>
+      ${
+        attentionItems.length === 0
+          ? '<tr><td colspan="2" class="muted">Nothing outstanding.</td></tr>'
+          : attentionItems
+              .map(
+                (item) =>
+                  `<tr><td class="attention-title">${escapeHtml(item.title)}</td><td class="attention-desc">${escapeHtml(item.description)}</td></tr>`,
+              )
+              .join("\n      ")
+      }
+    </tbody>
+  </table>
+
+  <h2>Recent Audit Trail</h2>
+  <table>
+    <thead><tr><th>Time</th><th>Entry</th><th>By</th></tr></thead>
+    <tbody>
+      ${state.audit
+        .slice(0, 15)
+        .map((item) => `<tr><td>${escapeHtml(item.time)}</td><td>${escapeHtml(item.text)}</td><td>${escapeHtml(item.user)}</td></tr>`)
+        .join("\n      ")}
+    </tbody>
+  </table>
+</body>
+</html>`;
+}
+
 function Dashboard({
   state,
   totals,
@@ -3880,8 +3998,18 @@ function Dashboard({
     });
   }
 
+  const downloadManagerPack = () => {
+    downloadHtmlFile(`blue-hills-manager-pack-${businessDateIso}.html`, buildManagerPackHtml(state, totals, metrics, attentionItems));
+  };
+
   return (
-    <Page title="Executive Dashboard" description="Live operational picture for Blue Hills Camp." action="Print Manager Pack" icon={Printer}>
+    <Page
+      title="Executive Dashboard"
+      description="Live operational picture for Blue Hills Camp."
+      action="Print Manager Pack"
+      onAction={downloadManagerPack}
+      icon={Printer}
+    >
       <div className="kpi-grid">
         <KpiCard
           label="Occupancy"
