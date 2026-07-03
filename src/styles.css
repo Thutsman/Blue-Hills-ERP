@@ -695,6 +695,7 @@ tr:hover td {
 .badge.queued,
 .badge.booked,
 .badge.awaiting-approval,
+.badge.pending-approval,
 .badge.preparing,
 .badge.new,
 .badge.quoted,
@@ -712,6 +713,7 @@ tr:hover td {
 .badge.outstanding,
 .badge.dirty,
 .badge.high,
+.badge.urgent,
 .badge.needs-attention,
 .badge.variance,
 .badge.blocked,
@@ -719,6 +721,7 @@ tr:hover td {
 .badge.missing-report,
 .badge.not-wired,
 .badge.cancelled,
+.badge.rejected,
 .badge.no-show,
 .badge.lost {
   background: #fee2e2;
@@ -735,6 +738,7 @@ tr:hover td {
 .badge.held-for-arrival,
 .badge.placed-in-key-box,
 .badge.issued,
+.badge.converted-to-po,
 .badge.spare-key-released,
 .badge.demo-script,
 .badge.backend-needed,
@@ -1277,6 +1281,29 @@ textarea {
   gap: 12px;
   justify-content: space-between;
   padding: 10px 12px;
+}
+
+.line-item-row {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e5ebf2;
+  border-radius: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.line-item-row select,
+.line-item-row input {
+  flex: 1;
+  min-width: 90px;
+}
+
+.line-item-row span {
+  flex: 2;
+  font-weight: 700;
+  min-width: 140px;
 }
 
 .checklist-toggle {

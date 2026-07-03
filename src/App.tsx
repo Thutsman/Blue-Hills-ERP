@@ -56,7 +56,6 @@ type PaymentStatus = "Paid" | "Deposit Paid" | "Outstanding";
 type Lodge = "Zebra" | "Kudu" | "Impala" | "Dormitory";
 type RoomStatus = "Available" | "Occupied" | "Dirty" | "Maintenance" | "Staff";
 type KitchenStatus = "New" | "Preparing" | "Ready" | "Completed";
-type ApprovalStatus = "Awaiting Approval" | "Approved" | "Goods Received";
 
 type Room = {
   id: string;
@@ -240,13 +239,159 @@ type KitchenChecklistAlert = {
   checklistDate: string;
 };
 
+type StockCategory =
+  | "Food"
+  | "Beverages"
+  | "Cleaning Materials"
+  | "Office Supplies"
+  | "Maintenance Materials"
+  | "Activity Equipment"
+  | "Kitchen Equipment"
+  | "Bar Stock"
+  | "Uniforms"
+  | "Stationery";
+
+type SupplierStatus = "Active" | "Inactive";
+
+type Supplier = {
+  id: string;
+  name: string;
+  category: string;
+  contactPerson: string;
+  phone: string;
+  email?: string;
+  address?: string;
+  taxNumber?: string;
+  preferred: boolean;
+  paymentTerms: string;
+  status: SupplierStatus;
+};
+
+type SupplierFormValues = {
+  name: string;
+  category: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  address: string;
+  taxNumber: string;
+  preferred: boolean;
+  paymentTerms: string;
+};
+
+type InventoryItemStatus = "Active" | "Discontinued";
+
+type InventoryItem = {
+  id: string;
+  name: string;
+  category: StockCategory;
+  unit: string;
+  supplierId: string;
+  reorderLevel: number;
+  minStock: number;
+  maxStock: number;
+  currentQuantity: number;
+  averageCost: number;
+  status: InventoryItemStatus;
+};
+
+type InventoryItemFormValues = {
+  name: string;
+  category: StockCategory;
+  unit: string;
+  supplierId: string;
+  reorderLevel: number;
+  minStock: number;
+  maxStock: number;
+  currentQuantity: number;
+  averageCost: number;
+};
+
+type RequestPriority = "Low" | "Normal" | "High" | "Urgent";
+
+type PurchaseRequestStatus = "Draft" | "Pending Approval" | "Approved" | "Rejected" | "Converted to PO";
+
+type PurchaseLineItem = {
+  itemId?: string;
+  description: string;
+  quantity: number;
+  estimatedCost: number;
+};
+
 type PurchaseRequest = {
   id: string;
   department: string;
-  supplier: string;
+  requestedBy: string;
+  requestDate: string;
+  priority: RequestPriority;
+  requiredDate: string;
+  reason: string;
+  items: PurchaseLineItem[];
+  estimatedTotal: number;
+  status: PurchaseRequestStatus;
+};
+
+type PurchaseRequestFormValues = {
+  department: string;
+  requestedBy: string;
+  priority: RequestPriority;
+  requiredDate: string;
+  reason: string;
+  items: PurchaseLineItem[];
+};
+
+type PoStatus = "Issued" | "Goods Received" | "Cancelled";
+
+type GoodsReceivedCondition = "Good" | "Damaged" | "Partial";
+
+type PurchaseOrderLineItem = {
+  itemId?: string;
   description: string;
-  amount: number;
-  status: ApprovalStatus;
+  quantityOrdered: number;
+  quantityReceived: number;
+  unitPrice: number;
+  condition?: GoodsReceivedCondition;
+};
+
+type PurchaseOrder = {
+  id: string;
+  requestId: string;
+  supplierId: string;
+  department: string;
+  issueDate: string;
+  deliveryDate: string;
+  requestedBy: string;
+  approvedBy: string;
+  items: PurchaseOrderLineItem[];
+  total: number;
+  status: PoStatus;
+  notes?: string;
+  receivedBy?: string;
+  receivedDate?: string;
+  receivingComments?: string;
+};
+
+type PurchaseOrderFormValues = {
+  supplierId: string;
+  deliveryDate: string;
+  approvedBy: string;
+  items: Array<{ itemId?: string; description: string; quantity: number; unitPrice: number }>;
+  notes: string;
+};
+
+type GoodsReceivedFormValues = {
+  receivedBy: string;
+  comments: string;
+  items: Array<{ itemId?: string; description: string; quantityOrdered: number; quantityReceived: number; condition: GoodsReceivedCondition }>;
+};
+
+type LowStockAlert = {
+  itemId: string;
+  name: string;
+  currentQuantity: number;
+  reorderLevel: number;
+  unit: string;
+  severity: "warning" | "danger";
 };
 
 type ActivityType = "Zipline" | "Quad Bike" | "Mountaineering" | "Putt Putt" | "Biking";
@@ -447,6 +592,9 @@ type DemoState = {
   housekeeping: HousekeepingTask[];
   orders: PosOrder[];
   purchaseRequests: PurchaseRequest[];
+  purchaseOrders: PurchaseOrder[];
+  inventoryItems: InventoryItem[];
+  suppliers: Supplier[];
   activities: ActivityBooking[];
   enquiries: Enquiry[];
   manualTasks: ManualTask[];
@@ -463,7 +611,7 @@ type DemoState = {
   housekeepingChecklists: HousekeepingChecklist[];
 };
 
-const storageKey = "blue-hills-erp-demo-v4";
+const storageKey = "blue-hills-erp-demo-v5";
 
 const LODGE_ORDER: Lodge[] = ["Zebra", "Kudu", "Impala", "Dormitory"];
 
@@ -544,6 +692,34 @@ const ACTIVITY_PRICE: Record<ActivityType, number> = {
 
 function createDefaultActivityChecklistItems(activity: ActivityType): ActivityChecklistItem[] {
   return ACTIVITY_CHECKLIST_TEMPLATE[activity].map((label) => ({ label, status: "Pass" as ChecklistItemStatus }));
+}
+
+const STOCK_CATEGORIES: StockCategory[] = [
+  "Food",
+  "Beverages",
+  "Cleaning Materials",
+  "Office Supplies",
+  "Maintenance Materials",
+  "Activity Equipment",
+  "Kitchen Equipment",
+  "Bar Stock",
+  "Uniforms",
+  "Stationery",
+];
+
+const REQUEST_PRIORITIES: RequestPriority[] = ["Low", "Normal", "High", "Urgent"];
+
+function computeLowStockAlerts(items: InventoryItem[]): LowStockAlert[] {
+  return items
+    .filter((item) => item.status === "Active" && item.currentQuantity <= item.reorderLevel)
+    .map((item) => ({
+      itemId: item.id,
+      name: item.name,
+      currentQuantity: item.currentQuantity,
+      reorderLevel: item.reorderLevel,
+      unit: item.unit,
+      severity: item.currentQuantity <= item.minStock ? "danger" : "warning",
+    }));
 }
 
 const MENU_CATALOG: MenuCatalogItem[] = [
@@ -946,7 +1122,7 @@ function buildDashboardMetrics(state: DemoState): DashboardMetrics {
     roomSummary,
     newEnquiries: state.enquiries.filter((enquiry) => enquiry.status === "New").length,
     pendingMessages: state.messages.filter((message) => message.status !== "Delivered").length,
-    pendingPurchases: state.purchaseRequests.filter((request) => request.status === "Awaiting Approval").length,
+    pendingPurchases: state.purchaseRequests.filter((request) => request.status === "Pending Approval").length,
     newKitchenOrders: state.orders.filter((order) => order.kitchenStatus === "New").length,
     activeActivities: state.activities.filter((booking) => booking.status === "In Progress").length,
     activitiesToday,
@@ -1104,22 +1280,178 @@ function createSeedState(): DemoState {
         placedAt: "09:05",
       },
     ],
+    suppliers: [
+      {
+        id: "SUP-1",
+        name: "Mutare Fresh Foods",
+        category: "Food & Produce",
+        contactPerson: "Rudo Chapfika",
+        phone: "+263 71 233 1187",
+        email: "orders@mutarefresh.co.zw",
+        preferred: true,
+        paymentTerms: "7 days",
+        status: "Active",
+      },
+      {
+        id: "SUP-2",
+        name: "Rusape Hardware",
+        category: "Hardware & Maintenance",
+        contactPerson: "Simba Gwenzi",
+        phone: "+263 77 809 2244",
+        preferred: false,
+        paymentTerms: "Cash on Delivery",
+        status: "Active",
+      },
+      {
+        id: "SUP-3",
+        name: "Bulawayo Beverages",
+        category: "Beverages",
+        contactPerson: "Kudzai Ndlovu",
+        phone: "+263 78 445 6621",
+        email: "sales@bulawayobev.co.zw",
+        preferred: true,
+        paymentTerms: "30 days",
+        status: "Active",
+      },
+    ],
+    inventoryItems: [
+      {
+        id: "ITM-001",
+        name: "Castle Lite (case)",
+        category: "Bar Stock",
+        unit: "case",
+        supplierId: "SUP-3",
+        reorderLevel: 10,
+        minStock: 5,
+        maxStock: 40,
+        currentQuantity: 6,
+        averageCost: 20,
+        status: "Active",
+      },
+      {
+        id: "ITM-002",
+        name: "Chicken",
+        category: "Food",
+        unit: "kg",
+        supplierId: "SUP-1",
+        reorderLevel: 15,
+        minStock: 10,
+        maxStock: 60,
+        currentQuantity: 22,
+        averageCost: 4.5,
+        status: "Active",
+      },
+      {
+        id: "ITM-003",
+        name: "Pool Pump Fittings",
+        category: "Maintenance Materials",
+        unit: "set",
+        supplierId: "SUP-2",
+        reorderLevel: 2,
+        minStock: 1,
+        maxStock: 6,
+        currentQuantity: 4,
+        averageCost: 61.25,
+        status: "Active",
+      },
+      {
+        id: "ITM-004",
+        name: "Diesel",
+        category: "Maintenance Materials",
+        unit: "ltrs",
+        supplierId: "SUP-2",
+        reorderLevel: 20,
+        minStock: 10,
+        maxStock: 100,
+        currentQuantity: 15,
+        averageCost: 1.6,
+        status: "Active",
+      },
+    ],
     purchaseRequests: [
       {
         id: "PR-318",
         department: "Kitchen",
-        supplier: "Mutare Fresh Foods",
-        description: "Vegetables, chicken, and breakfast stock",
-        amount: 620,
-        status: "Awaiting Approval",
+        requestedBy: "Tendai",
+        requestDate: "Jul 01",
+        priority: "Normal",
+        requiredDate: "Jul 04",
+        reason: "Weekly kitchen restock running low ahead of the school camp group.",
+        items: [
+          { itemId: "ITM-002", description: "Chicken", quantity: 60, estimatedCost: 270 },
+          { description: "Vegetables and breakfast stock", quantity: 1, estimatedCost: 350 },
+        ],
+        estimatedTotal: 620,
+        status: "Pending Approval",
+      },
+      {
+        id: "PR-320",
+        department: "Bar",
+        requestedBy: "Farai",
+        requestDate: "Jul 02",
+        priority: "High",
+        requiredDate: "Jul 05",
+        reason: "Castle Lite is below reorder level with a conference group arriving.",
+        items: [{ itemId: "ITM-001", description: "Castle Lite (case)", quantity: 30, estimatedCost: 600 }],
+        estimatedTotal: 600,
+        status: "Approved",
       },
       {
         id: "PR-319",
         department: "Maintenance",
-        supplier: "Rusape Hardware",
-        description: "Pool pump fittings and Kudu lodge repairs",
-        amount: 245,
-        status: "Approved",
+        requestedBy: "Blessing",
+        requestDate: "Jun 28",
+        priority: "High",
+        requiredDate: "Jul 01",
+        reason: "Pool pump fittings needed for Kudu lodge repairs.",
+        items: [{ itemId: "ITM-003", description: "Pool pump fittings", quantity: 4, estimatedCost: 245 }],
+        estimatedTotal: 245,
+        status: "Converted to PO",
+      },
+      {
+        id: "PR-321",
+        department: "Kitchen",
+        requestedBy: "Chef",
+        requestDate: "Jul 02",
+        priority: "Urgent",
+        requiredDate: "Jul 04",
+        reason: "Chicken stock will run out before the weekend.",
+        items: [{ itemId: "ITM-002", description: "Chicken (restock)", quantity: 15, estimatedCost: 67.5 }],
+        estimatedTotal: 67.5,
+        status: "Converted to PO",
+      },
+    ],
+    purchaseOrders: [
+      {
+        id: "PO-901",
+        requestId: "PR-319",
+        supplierId: "SUP-2",
+        department: "Maintenance",
+        issueDate: "Jun 29",
+        deliveryDate: "Jul 01",
+        requestedBy: "Blessing",
+        approvedBy: "Manager",
+        items: [
+          { itemId: "ITM-003", description: "Pool pump fittings", quantityOrdered: 4, quantityReceived: 4, unitPrice: 61.25, condition: "Good" },
+        ],
+        total: 245,
+        status: "Goods Received",
+        receivedBy: "Blessing",
+        receivedDate: "Jul 01",
+        receivingComments: "All fittings received in good condition, pump repaired same day.",
+      },
+      {
+        id: "PO-902",
+        requestId: "PR-321",
+        supplierId: "SUP-1",
+        department: "Kitchen",
+        issueDate: "Jul 02",
+        deliveryDate: "Jul 04",
+        requestedBy: "Chef",
+        approvedBy: "Manager",
+        items: [{ itemId: "ITM-002", description: "Chicken (restock)", quantityOrdered: 15, quantityReceived: 0, unitPrice: 4.5 }],
+        total: 67.5,
+        status: "Issued",
       },
     ],
     activities: [
@@ -1428,6 +1760,11 @@ function App() {
   const [safetyIncidentModalOpen, setSafetyIncidentModalOpen] = useState(false);
   const [orderDrawer, setOrderDrawer] = useState<{ initialItem?: string } | null>(null);
   const [kitchenChecklistDrawerOpen, setKitchenChecklistDrawerOpen] = useState(false);
+  const [purchaseRequestDrawerOpen, setPurchaseRequestDrawerOpen] = useState(false);
+  const [purchaseOrderDrawerRequestId, setPurchaseOrderDrawerRequestId] = useState<string | null>(null);
+  const [goodsReceivedOrderId, setGoodsReceivedOrderId] = useState<string | null>(null);
+  const [itemDrawerOpen, setItemDrawerOpen] = useState(false);
+  const [supplierDrawerOpen, setSupplierDrawerOpen] = useState(false);
 
   const openNewReservation = () => {
     setReservationPrefill(null);
@@ -1817,24 +2154,182 @@ function App() {
     setChecklistDrawerOpen(false);
   };
 
-  const approvePurchase = (id: string) => {
+  const createPurchaseRequest = (values: PurchaseRequestFormValues) => {
+    const id = `PR-${320 + state.purchaseRequests.length + Math.floor(Math.random() * 90)}`;
+    const estimatedTotal = values.items.reduce((sum, item) => sum + item.estimatedCost, 0);
+    const newRequest: PurchaseRequest = {
+      id,
+      department: values.department,
+      requestedBy: values.requestedBy,
+      requestDate: businessDateLabel,
+      priority: values.priority,
+      requiredDate: values.requiredDate,
+      reason: values.reason,
+      items: values.items,
+      estimatedTotal,
+      status: "Pending Approval",
+    };
+
+    withAudit(
+      { ...state, purchaseRequests: [newRequest, ...state.purchaseRequests] },
+      `${id} raised by ${values.requestedBy} (${values.department}): ${money.format(estimatedTotal)} estimated`,
+      values.requestedBy,
+    );
+    setPurchaseRequestDrawerOpen(false);
+  };
+
+  const approvePurchaseRequest = (id: string) => {
     const request = state.purchaseRequests.find((item) => item.id === id);
     if (!request) return;
 
-    const nextStatus: Record<ApprovalStatus, ApprovalStatus> = {
-      "Awaiting Approval": "Approved",
-      Approved: "Goods Received",
-      "Goods Received": "Goods Received",
+    withAudit(
+      { ...state, purchaseRequests: state.purchaseRequests.map((item) => (item.id === id ? { ...item, status: "Approved" } : item)) },
+      `${id} approved for ${request.department}`,
+      "Manager",
+    );
+  };
+
+  const rejectPurchaseRequest = (id: string) => {
+    const request = state.purchaseRequests.find((item) => item.id === id);
+    if (!request) return;
+
+    withAudit(
+      { ...state, purchaseRequests: state.purchaseRequests.map((item) => (item.id === id ? { ...item, status: "Rejected" } : item)) },
+      `${id} rejected for ${request.department}`,
+      "Manager",
+    );
+  };
+
+  const createPurchaseOrder = (requestId: string, values: PurchaseOrderFormValues) => {
+    const request = state.purchaseRequests.find((item) => item.id === requestId);
+    if (!request) return;
+
+    const id = `PO-${900 + state.purchaseOrders.length + Math.floor(Math.random() * 90)}`;
+    const items: PurchaseOrderLineItem[] = values.items.map((item) => ({
+      itemId: item.itemId,
+      description: item.description,
+      quantityOrdered: item.quantity,
+      quantityReceived: 0,
+      unitPrice: item.unitPrice,
+    }));
+    const total = items.reduce((sum, item) => sum + item.unitPrice * item.quantityOrdered, 0);
+
+    const newOrder: PurchaseOrder = {
+      id,
+      requestId,
+      supplierId: values.supplierId,
+      department: request.department,
+      issueDate: businessDateLabel,
+      deliveryDate: values.deliveryDate,
+      requestedBy: request.requestedBy,
+      approvedBy: values.approvedBy,
+      items,
+      total,
+      status: "Issued",
+      notes: values.notes || undefined,
     };
 
     withAudit(
       {
         ...state,
-        purchaseRequests: state.purchaseRequests.map((item) => (item.id === id ? { ...item, status: nextStatus[item.status] } : item)),
+        purchaseOrders: [newOrder, ...state.purchaseOrders],
+        purchaseRequests: state.purchaseRequests.map((item) => (item.id === requestId ? { ...item, status: "Converted to PO" } : item)),
       },
-      `${id} changed to ${nextStatus[request.status]}`,
+      `${id} issued from ${requestId}: ${money.format(total)} due ${values.deliveryDate}`,
+      values.approvedBy,
+    );
+    setPurchaseOrderDrawerRequestId(null);
+  };
+
+  const cancelPurchaseOrder = (id: string) => {
+    const order = state.purchaseOrders.find((item) => item.id === id);
+    if (!order || order.status !== "Issued") return;
+
+    withAudit(
+      { ...state, purchaseOrders: state.purchaseOrders.map((item) => (item.id === id ? { ...item, status: "Cancelled" } : item)) },
+      `${id} cancelled`,
       "Manager",
     );
+  };
+
+  const receiveGoods = (poId: string, values: GoodsReceivedFormValues) => {
+    const order = state.purchaseOrders.find((item) => item.id === poId);
+    if (!order) return;
+
+    const receivedById = new Map(values.items.map((item) => [item.description, item]));
+    const updatedItems = order.items.map((line) => {
+      const received = receivedById.get(line.description);
+      return received
+        ? { ...line, quantityReceived: received.quantityReceived, condition: received.condition }
+        : line;
+    });
+
+    const fullyReceived = updatedItems.every((line) => line.quantityReceived >= line.quantityOrdered);
+
+    const inventoryItems = state.inventoryItems.map((invItem) => {
+      const delta = values.items
+        .filter((line) => line.itemId === invItem.id)
+        .reduce((sum, line) => sum + line.quantityReceived, 0);
+      return delta > 0 ? { ...invItem, currentQuantity: invItem.currentQuantity + delta } : invItem;
+    });
+
+    withAudit(
+      {
+        ...state,
+        inventoryItems,
+        purchaseOrders: state.purchaseOrders.map((item) =>
+          item.id === poId
+            ? {
+                ...item,
+                items: updatedItems,
+                status: fullyReceived ? "Goods Received" : item.status,
+                receivedBy: values.receivedBy,
+                receivedDate: businessDateLabel,
+                receivingComments: values.comments || undefined,
+              }
+            : item,
+        ),
+      },
+      `${poId} goods received by ${values.receivedBy}${fullyReceived ? " - fully received" : " - partially received"}, inventory updated`,
+      values.receivedBy,
+    );
+    setGoodsReceivedOrderId(null);
+  };
+
+  const createInventoryItem = (values: InventoryItemFormValues) => {
+    const id = `ITM-${(100 + state.inventoryItems.length).toString().padStart(3, "0")}`;
+    const newItem: InventoryItem = { id, ...values, status: "Active" };
+
+    withAudit(
+      { ...state, inventoryItems: [newItem, ...state.inventoryItems] },
+      `${id} added to the item master: ${values.name}`,
+      "Stores",
+    );
+    setItemDrawerOpen(false);
+  };
+
+  const createSupplier = (values: SupplierFormValues) => {
+    const id = `SUP-${4 + state.suppliers.length}`;
+    const newSupplier: Supplier = {
+      id,
+      name: values.name,
+      category: values.category,
+      contactPerson: values.contactPerson,
+      phone: values.phone,
+      email: values.email || undefined,
+      address: values.address || undefined,
+      taxNumber: values.taxNumber || undefined,
+      preferred: values.preferred,
+      paymentTerms: values.paymentTerms,
+      status: "Active",
+    };
+
+    withAudit(
+      { ...state, suppliers: [newSupplier, ...state.suppliers] },
+      `${id} added to suppliers: ${values.name}`,
+      "Procurement",
+    );
+    setSupplierDrawerOpen(false);
   };
 
   const completeManualTask = (id: string) => {
@@ -2137,7 +2632,19 @@ function App() {
             onOpenSafetyIncidentModal={() => setSafetyIncidentModalOpen(true)}
           />
         )}
-        {activeModule === "procurement" && <Procurement state={state} onApprovePurchase={approvePurchase} />}
+        {activeModule === "procurement" && (
+          <Procurement
+            state={state}
+            onApproveRequest={approvePurchaseRequest}
+            onRejectRequest={rejectPurchaseRequest}
+            onOpenRequestDrawer={() => setPurchaseRequestDrawerOpen(true)}
+            onOpenPurchaseOrderDrawer={setPurchaseOrderDrawerRequestId}
+            onCancelOrder={cancelPurchaseOrder}
+            onOpenGoodsReceivedModal={setGoodsReceivedOrderId}
+            onOpenItemDrawer={() => setItemDrawerOpen(true)}
+            onOpenSupplierDrawer={() => setSupplierDrawerOpen(true)}
+          />
+        )}
         {activeModule === "finance" && <Finance state={state} totals={totals} onMarkReportPrinted={markReportPrinted} />}
       </main>
 
@@ -2212,6 +2719,45 @@ function App() {
       {kitchenChecklistDrawerOpen && (
         <KitchenChecklistDrawer onClose={() => setKitchenChecklistDrawerOpen(false)} onSave={saveKitchenChecklist} />
       )}
+
+      {purchaseRequestDrawerOpen && (
+        <PurchaseRequestDrawer
+          inventoryItems={state.inventoryItems}
+          onClose={() => setPurchaseRequestDrawerOpen(false)}
+          onSave={createPurchaseRequest}
+        />
+      )}
+
+      {purchaseOrderDrawerRequestId &&
+        (() => {
+          const sourceRequest = state.purchaseRequests.find((item) => item.id === purchaseOrderDrawerRequestId);
+          return sourceRequest ? (
+            <PurchaseOrderDrawer
+              request={sourceRequest}
+              suppliers={state.suppliers}
+              onClose={() => setPurchaseOrderDrawerRequestId(null)}
+              onSave={(values) => createPurchaseOrder(sourceRequest.id, values)}
+            />
+          ) : null;
+        })()}
+
+      {goodsReceivedOrderId &&
+        (() => {
+          const sourceOrder = state.purchaseOrders.find((item) => item.id === goodsReceivedOrderId);
+          return sourceOrder ? (
+            <GoodsReceivedModal
+              order={sourceOrder}
+              onClose={() => setGoodsReceivedOrderId(null)}
+              onSave={(values) => receiveGoods(sourceOrder.id, values)}
+            />
+          ) : null;
+        })()}
+
+      {itemDrawerOpen && (
+        <InventoryItemDrawer suppliers={state.suppliers} onClose={() => setItemDrawerOpen(false)} onSave={createInventoryItem} />
+      )}
+
+      {supplierDrawerOpen && <SupplierDrawer onClose={() => setSupplierDrawerOpen(false)} onSave={createSupplier} />}
     </div>
   );
 }
@@ -2230,12 +2776,12 @@ function Dashboard({
   const attentionItems: Array<{ key: string; icon: LucideIcon; title: string; description: string }> = [];
 
   if (metrics.pendingPurchases > 0) {
-    const pending = state.purchaseRequests.find((request) => request.status === "Awaiting Approval");
+    const pending = state.purchaseRequests.find((request) => request.status === "Pending Approval");
     attentionItems.push({
       key: "purchase",
       icon: Bell,
       title: `${metrics.pendingPurchases} purchase request${metrics.pendingPurchases > 1 ? "s" : ""} awaiting approval`,
-      description: pending ? `${pending.id} - ${pending.description}` : "Procurement needs manager sign-off.",
+      description: pending ? `${pending.id} - ${pending.reason}` : "Procurement needs manager sign-off.",
     });
   }
 
@@ -3419,41 +3965,178 @@ function Operations({
   );
 }
 
-function Procurement({ state, onApprovePurchase }: { state: DemoState; onApprovePurchase: (id: string) => void }) {
+function Procurement({
+  state,
+  onApproveRequest,
+  onRejectRequest,
+  onOpenRequestDrawer,
+  onOpenPurchaseOrderDrawer,
+  onCancelOrder,
+  onOpenGoodsReceivedModal,
+  onOpenItemDrawer,
+  onOpenSupplierDrawer,
+}: {
+  state: DemoState;
+  onApproveRequest: (id: string) => void;
+  onRejectRequest: (id: string) => void;
+  onOpenRequestDrawer: () => void;
+  onOpenPurchaseOrderDrawer: (requestId: string) => void;
+  onCancelOrder: (id: string) => void;
+  onOpenGoodsReceivedModal: (orderId: string) => void;
+  onOpenItemDrawer: () => void;
+  onOpenSupplierDrawer: () => void;
+}) {
+  const lowStockAlerts = computeLowStockAlerts(state.inventoryItems);
+  const supplierName = (id: string) => state.suppliers.find((supplier) => supplier.id === id)?.name ?? "Unknown supplier";
+  const pendingApprovals = state.purchaseRequests.filter((request) => request.status === "Pending Approval").length;
+  const openOrders = state.purchaseOrders.filter((order) => order.status === "Issued").length;
+
   return (
-    <Page title="Procurement & Stores" description="Purchase request to approval, receipt attachment, goods received, and stock update." action="New Purchase Request" icon={Package}>
+    <Page
+      title="Procurement & Stores"
+      description="Purchase request to approval, purchase order, goods received, and stock update."
+      action="New Purchase Request"
+      onAction={onOpenRequestDrawer}
+      icon={Package}
+    >
+      <div className="kpi-grid">
+        <KpiCard
+          label="Pending Approvals"
+          value={pendingApprovals.toString()}
+          helper="Requests awaiting a manager"
+          icon={ClipboardCheck}
+          tone={pendingApprovals > 0 ? "warning" : undefined}
+        />
+        <KpiCard label="Open Purchase Orders" value={openOrders.toString()} helper="Issued, awaiting delivery" icon={Package} />
+        <KpiCard
+          label="Low Stock Items"
+          value={lowStockAlerts.length.toString()}
+          helper="At or below reorder level"
+          icon={Warehouse}
+          tone={lowStockAlerts.length > 0 ? "danger" : undefined}
+        />
+      </div>
+
       <section className="panel">
-        <PanelHeader title="Purchase Request Tracker" subtitle="Digitizes the paper PO workflow with manager approvals." />
+        <PanelHeader
+          title="Purchase Requests"
+          subtitle="Department raises a request; a manager approves it before a Purchase Order can be issued."
+          action={
+            <button className="secondary-button" onClick={onOpenRequestDrawer} type="button">
+              <Plus size={16} />
+              New Request
+            </button>
+          }
+        />
         <table>
           <thead>
             <tr>
               <th>Request</th>
               <th>Department</th>
-              <th>Supplier</th>
-              <th>Description</th>
-              <th>Amount</th>
+              <th>Requested By</th>
+              <th>Priority</th>
+              <th>Required</th>
+              <th>Items</th>
+              <th>Est. Total</th>
               <th>Status</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody>
+            {state.purchaseRequests.length === 0 && (
+              <tr>
+                <td colSpan={9}>
+                  <p className="muted">No purchase requests yet.</p>
+                </td>
+              </tr>
+            )}
             {state.purchaseRequests.map((request) => (
               <tr key={request.id}>
                 <td>{request.id}</td>
                 <td>{request.department}</td>
-                <td>{request.supplier}</td>
-                <td>{request.description}</td>
-                <td>{money.format(request.amount)}</td>
+                <td>{request.requestedBy}</td>
+                <td>
+                  <Badge label={request.priority} />
+                </td>
+                <td>{request.requiredDate}</td>
+                <td>{request.items.map((item) => item.description).join(", ")}</td>
+                <td>{money.format(request.estimatedTotal)}</td>
                 <td>
                   <Badge label={request.status} />
                 </td>
-                <td>
-                  {request.status !== "Goods Received" ? (
-                    <button className="secondary-button" onClick={() => onApprovePurchase(request.id)} type="button">
-                      {request.status === "Awaiting Approval" ? "Approve" : "Receive Goods"}
+                <td className="actions-cell">
+                  {request.status === "Pending Approval" && (
+                    <>
+                      <button className="secondary-button" onClick={() => onApproveRequest(request.id)} type="button">
+                        Approve
+                      </button>
+                      <button className="ghost-button" onClick={() => onRejectRequest(request.id)} type="button">
+                        Reject
+                      </button>
+                    </>
+                  )}
+                  {request.status === "Approved" && (
+                    <button className="secondary-button" onClick={() => onOpenPurchaseOrderDrawer(request.id)} type="button">
+                      Create Purchase Order
                     </button>
+                  )}
+                  {(request.status === "Converted to PO" || request.status === "Rejected") && <span className="muted">Closed</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="panel">
+        <PanelHeader title="Purchase Orders" subtitle="Issued only from approved requests; goods received updates the item master automatically." />
+        <table>
+          <thead>
+            <tr>
+              <th>PO</th>
+              <th>Supplier</th>
+              <th>Department</th>
+              <th>Issued</th>
+              <th>Delivery</th>
+              <th>Total</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.purchaseOrders.length === 0 && (
+              <tr>
+                <td colSpan={8}>
+                  <p className="muted">No purchase orders yet.</p>
+                </td>
+              </tr>
+            )}
+            {state.purchaseOrders.map((order) => (
+              <tr key={order.id}>
+                <td>
+                  {order.id}
+                  <span className="muted block">from {order.requestId}</span>
+                </td>
+                <td>{supplierName(order.supplierId)}</td>
+                <td>{order.department}</td>
+                <td>{order.issueDate}</td>
+                <td>{order.deliveryDate}</td>
+                <td>{money.format(order.total)}</td>
+                <td>
+                  <Badge label={order.status} />
+                </td>
+                <td className="actions-cell">
+                  {order.status === "Issued" ? (
+                    <>
+                      <button className="secondary-button" onClick={() => onOpenGoodsReceivedModal(order.id)} type="button">
+                        Receive Goods
+                      </button>
+                      <button className="ghost-button" onClick={() => onCancelOrder(order.id)} type="button">
+                        Cancel
+                      </button>
+                    </>
                   ) : (
-                    <span className="muted">Closed</span>
+                    <span className="muted">{order.status === "Goods Received" ? `Received ${order.receivedDate}` : "Closed"}</span>
                   )}
                 </td>
               </tr>
@@ -3464,29 +4147,110 @@ function Procurement({ state, onApprovePurchase }: { state: DemoState; onApprove
 
       <div className="content-grid">
         <section className="panel">
-          <PanelHeader title="Stock Alerts" subtitle="Demo inventory signals for stores and management." />
-          <div className="attention-list">
-            <Attention icon={Package} title="Castle Lite below reorder level" description="Bar stock variance requires review." />
-            <Attention icon={Warehouse} title="Paintball masks due for count" description="Field quantities must match store quantities." />
-          </div>
+          <PanelHeader
+            title="Item Master"
+            subtitle="Stock catalog shared across departments."
+            action={
+              <button className="secondary-button" onClick={onOpenItemDrawer} type="button">
+                <Plus size={16} />
+                New Item
+              </button>
+            }
+          />
+          <table className="stock-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Category</th>
+                <th>Qty</th>
+                <th>Reorder</th>
+                <th>Supplier</th>
+              </tr>
+            </thead>
+            <tbody>
+              {state.inventoryItems.map((item) => (
+                <tr key={item.id} className={item.currentQuantity <= item.reorderLevel ? "stock-low" : ""}>
+                  <td>
+                    {item.name}
+                    <span className="muted block">{item.unit}</span>
+                  </td>
+                  <td>{item.category}</td>
+                  <td className={item.currentQuantity <= item.reorderLevel ? "stock-low-cell" : ""}>{item.currentQuantity}</td>
+                  <td>{item.reorderLevel}</td>
+                  <td>{supplierName(item.supplierId)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </section>
+
         <section className="panel">
-          <PanelHeader title="Document Control" subtitle="Receipts and PDFs will attach to each PO in the backend build." />
-          <div className="document-preview">
-            <Receipt size={34} />
-            <strong>PR-318 Receipt Attachment</strong>
-            <span>Ready for scanned supplier receipt and finance verification.</span>
+          <PanelHeader
+            title="Suppliers"
+            subtitle="Supplier database for purchase orders."
+            action={
+              <button className="secondary-button" onClick={onOpenSupplierDrawer} type="button">
+                <Plus size={16} />
+                New Supplier
+              </button>
+            }
+          />
+          <div className="stack">
+            {state.suppliers.map((supplier) => (
+              <div className="task-card" key={supplier.id}>
+                <div>
+                  <strong>
+                    {supplier.name}
+                    {supplier.preferred ? " - Preferred" : ""}
+                  </strong>
+                  <span>
+                    {supplier.category} - {supplier.contactPerson} - {supplier.phone}
+                  </span>
+                </div>
+                <Badge label={supplier.paymentTerms} />
+              </div>
+            ))}
           </div>
         </section>
       </div>
 
       <section className="panel">
-        <PanelHeader title="Stores & Bar Stock Workflows Still To Digitize" subtitle="Manual processes that should be visible in the demo before the backend build." />
+        <PanelHeader title="Low Stock Alerts" subtitle="Computed live from the item master's reorder levels." />
+        {lowStockAlerts.length === 0 ? (
+          <p className="muted">No items at or below reorder level.</p>
+        ) : (
+          <div className="attention-list">
+            {lowStockAlerts.map((alert) => (
+              <Attention
+                key={alert.itemId}
+                icon={Warehouse}
+                title={`${alert.name} ${alert.severity === "danger" ? "critical" : "low"}`}
+                description={`${alert.currentQuantity} ${alert.unit} on hand - reorder level is ${alert.reorderLevel} ${alert.unit}`}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="panel">
+        <PanelHeader title="Still To Digitize" subtitle="Genuine gaps that remain after the request-to-stock loop above." />
         <div className="control-grid">
-          <ControlCard title="Goods Received Note" detail="Stores verifies supplier quantity, matches PO, records GRN and updates stock." status="Partial" />
-          <ControlCard title="Department Stock Issue" detail="Departments request stock, stores approves, stock reduces and consumption is recorded." status="Missing" />
-          <ControlCard title="Bar Opening / Closing Count" detail="Opening count, sales, transfers, closing count, variance and manager approval." status="Missing" />
-          <ControlCard title="Gate Pass & Emergency Stores Access" detail="Security, chef and duty manager supervise emergency store room openings." status="Missing" />
+          <ControlCard
+            title="Department Stock Issue"
+            detail="Departments request stock from Main Stores, stores approves, stock reduces and consumption is recorded per department."
+            status="Missing"
+          />
+          <ControlCard
+            title="Stock Transfer & Adjustment"
+            detail="Transfers between locations and adjustments for damage/loss/theft, with manager approval and a full movement ledger."
+            status="Missing"
+          />
+          <ControlCard title="Stock Take & Variance Report" detail="Expected vs. counted quantities with an automatic variance report." status="Missing" />
+          <ControlCard
+            title="Receipt Upload"
+            detail="Supplier receipts (PDF/image) attached directly to a Purchase Order for finance verification."
+            status="Missing"
+          />
         </div>
       </section>
     </Page>
@@ -5352,6 +6116,458 @@ function KitchenChecklistDrawer({
   );
 }
 
+function PurchaseRequestDrawer({
+  inventoryItems,
+  onClose,
+  onSave,
+}: {
+  inventoryItems: InventoryItem[];
+  onClose: () => void;
+  onSave: (values: PurchaseRequestFormValues) => void;
+}) {
+  const [department, setDepartment] = useState("");
+  const [requestedBy, setRequestedBy] = useState("");
+  const [priority, setPriority] = useState<RequestPriority>("Normal");
+  const [requiredDate, setRequiredDate] = useState(dates[1]);
+  const [reason, setReason] = useState("");
+  const [items, setItems] = useState<PurchaseLineItem[]>([{ description: "", quantity: 1, estimatedCost: 0 }]);
+
+  const updateLine = (index: number, patch: Partial<PurchaseLineItem>) => {
+    setItems((current) => current.map((line, lineIndex) => (lineIndex === index ? { ...line, ...patch } : line)));
+  };
+
+  const addLine = () => setItems((current) => [...current, { description: "", quantity: 1, estimatedCost: 0 }]);
+  const removeLine = (index: number) => setItems((current) => current.filter((_, lineIndex) => lineIndex !== index));
+
+  const estimatedTotal = items.reduce((sum, item) => sum + item.estimatedCost, 0);
+  const canSave = Boolean(
+    department && requestedBy && requiredDate && reason && items.length > 0 && items.every((item) => item.description && item.quantity > 0),
+  );
+
+  return (
+    <Drawer title="New Purchase Request" description="Department raises the request; a manager approves it before a PO can be issued." onClose={onClose}>
+      <div className="form-grid">
+        <Field label="Department">
+          <input value={department} onChange={(event) => setDepartment(event.target.value)} placeholder="e.g. Kitchen" />
+        </Field>
+        <Field label="Requested By">
+          <input value={requestedBy} onChange={(event) => setRequestedBy(event.target.value)} placeholder="e.g. Chef" />
+        </Field>
+        <Field label="Priority">
+          <select value={priority} onChange={(event) => setPriority(event.target.value as RequestPriority)}>
+            {REQUEST_PRIORITIES.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Required Date">
+          <select value={requiredDate} onChange={(event) => setRequiredDate(event.target.value)}>
+            {dates.map((date) => (
+              <option key={date} value={date}>
+                {date}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      <Field label="Reason">
+        <textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={2} placeholder="Why is this needed?" />
+      </Field>
+
+      <section className="form-section">
+        <h3>Items</h3>
+        <div className="stack">
+          {items.map((line, index) => (
+            <div className="line-item-row" key={index}>
+              <select
+                value={line.itemId ?? ""}
+                onChange={(event) => {
+                  const catalogItem = inventoryItems.find((item) => item.id === event.target.value);
+                  updateLine(index, { itemId: catalogItem?.id, description: catalogItem?.name ?? line.description });
+                }}
+              >
+                <option value="">Custom item...</option>
+                {inventoryItems.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={line.description}
+                onChange={(event) => updateLine(index, { description: event.target.value })}
+                placeholder="Description"
+              />
+              <input
+                min={1}
+                onChange={(event) => updateLine(index, { quantity: Number(event.target.value) })}
+                placeholder="Qty"
+                type="number"
+                value={line.quantity}
+              />
+              <input
+                min={0}
+                onChange={(event) => updateLine(index, { estimatedCost: Number(event.target.value) })}
+                placeholder="Est. cost"
+                type="number"
+                value={line.estimatedCost}
+              />
+              <button className="icon-button" disabled={items.length === 1} onClick={() => removeLine(index)} type="button" aria-label="Remove item">
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button className="ghost-button" onClick={addLine} type="button">
+          <Plus size={16} />
+          Add Item
+        </button>
+        <div className="folio-line total">
+          <span>Estimated Total</span>
+          <strong>{money.format(estimatedTotal)}</strong>
+        </div>
+      </section>
+
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button
+          className="primary-button"
+          disabled={!canSave}
+          onClick={() => onSave({ department, requestedBy, priority, requiredDate, reason, items })}
+          type="button"
+        >
+          Submit for Approval
+        </button>
+      </div>
+    </Drawer>
+  );
+}
+
+function PurchaseOrderDrawer({
+  request,
+  suppliers,
+  onClose,
+  onSave,
+}: {
+  request: PurchaseRequest;
+  suppliers: Supplier[];
+  onClose: () => void;
+  onSave: (values: PurchaseOrderFormValues) => void;
+}) {
+  const [supplierId, setSupplierId] = useState(suppliers[0]?.id ?? "");
+  const [deliveryDate, setDeliveryDate] = useState(request.requiredDate);
+  const [approvedBy, setApprovedBy] = useState("");
+  const [notes, setNotes] = useState("");
+  const [unitPrices, setUnitPrices] = useState<number[]>(
+    request.items.map((item) => Math.round((item.estimatedCost / Math.max(1, item.quantity)) * 100) / 100),
+  );
+
+  const items = request.items.map((item, index) => ({
+    itemId: item.itemId,
+    description: item.description,
+    quantity: item.quantity,
+    unitPrice: unitPrices[index] ?? 0,
+  }));
+  const total = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  const canSave = Boolean(supplierId && deliveryDate && approvedBy);
+
+  return (
+    <Drawer title={`Issue Purchase Order - ${request.id}`} description={`From an approved request for ${request.department}: ${request.reason}`} onClose={onClose}>
+      <div className="form-grid">
+        <Field label="Supplier">
+          <select value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
+            {suppliers.map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {supplier.name}
+                {supplier.preferred ? " (Preferred)" : ""}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Delivery Date">
+          <select value={deliveryDate} onChange={(event) => setDeliveryDate(event.target.value)}>
+            {dates.map((date) => (
+              <option key={date} value={date}>
+                {date}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Approved By">
+          <input value={approvedBy} onChange={(event) => setApprovedBy(event.target.value)} placeholder="Manager name" />
+        </Field>
+      </div>
+
+      <section className="form-section">
+        <h3>Items</h3>
+        <div className="stack">
+          {request.items.map((item, index) => (
+            <div className="line-item-row" key={index}>
+              <span>
+                {item.quantity}x {item.description}
+              </span>
+              <input
+                min={0}
+                onChange={(event) =>
+                  setUnitPrices((current) => current.map((price, priceIndex) => (priceIndex === index ? Number(event.target.value) : price)))
+                }
+                placeholder="Unit price"
+                type="number"
+                value={unitPrices[index] ?? 0}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="folio-line total">
+          <span>Total</span>
+          <strong>{money.format(total)}</strong>
+        </div>
+      </section>
+
+      <Field label="Notes (optional)">
+        <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} />
+      </Field>
+
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button className="primary-button" disabled={!canSave} onClick={() => onSave({ supplierId, deliveryDate, approvedBy, items, notes })} type="button">
+          Issue Purchase Order
+        </button>
+      </div>
+    </Drawer>
+  );
+}
+
+function GoodsReceivedModal({
+  order,
+  onClose,
+  onSave,
+}: {
+  order: PurchaseOrder;
+  onClose: () => void;
+  onSave: (values: GoodsReceivedFormValues) => void;
+}) {
+  const [receivedBy, setReceivedBy] = useState("");
+  const [comments, setComments] = useState("");
+  const [lines, setLines] = useState(
+    order.items.map((item) => ({
+      itemId: item.itemId,
+      description: item.description,
+      quantityOrdered: item.quantityOrdered,
+      quantityReceived: item.quantityOrdered,
+      condition: "Good" as GoodsReceivedCondition,
+    })),
+  );
+
+  const updateLine = (index: number, patch: Partial<(typeof lines)[number]>) => {
+    setLines((current) => current.map((line, lineIndex) => (lineIndex === index ? { ...line, ...patch } : line)));
+  };
+
+  return (
+    <Modal title={`Receive Goods - ${order.id}`} description="Stores verifies quantity and condition before inventory updates." onClose={onClose}>
+      <div className="form-grid">
+        <Field label="Received By">
+          <input value={receivedBy} onChange={(event) => setReceivedBy(event.target.value)} placeholder="e.g. Stores Officer" />
+        </Field>
+      </div>
+
+      <section className="form-section">
+        <h3>Items Ordered</h3>
+        <div className="stack">
+          {lines.map((line, index) => (
+            <div className="line-item-row" key={index}>
+              <span>
+                {line.description}
+                <small className="block muted">Ordered {line.quantityOrdered}</small>
+              </span>
+              <input
+                min={0}
+                onChange={(event) => updateLine(index, { quantityReceived: Number(event.target.value) })}
+                type="number"
+                value={line.quantityReceived}
+              />
+              <select
+                value={line.condition}
+                onChange={(event) => updateLine(index, { condition: event.target.value as GoodsReceivedCondition })}
+              >
+                <option>Good</option>
+                <option>Damaged</option>
+                <option>Partial</option>
+              </select>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <Field label="Comments (optional)">
+        <textarea value={comments} onChange={(event) => setComments(event.target.value)} rows={2} />
+      </Field>
+
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button className="primary-button" disabled={!receivedBy} onClick={() => onSave({ receivedBy, comments, items: lines })} type="button">
+          Confirm Goods Received
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function InventoryItemDrawer({
+  suppliers,
+  onClose,
+  onSave,
+}: {
+  suppliers: Supplier[];
+  onClose: () => void;
+  onSave: (values: InventoryItemFormValues) => void;
+}) {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState<StockCategory>("Food");
+  const [unit, setUnit] = useState("");
+  const [supplierId, setSupplierId] = useState(suppliers[0]?.id ?? "");
+  const [reorderLevel, setReorderLevel] = useState(10);
+  const [minStock, setMinStock] = useState(5);
+  const [maxStock, setMaxStock] = useState(50);
+  const [currentQuantity, setCurrentQuantity] = useState(0);
+  const [averageCost, setAverageCost] = useState(0);
+
+  const canSave = Boolean(name && unit && supplierId);
+
+  return (
+    <Drawer title="New Item" description="Add a stock item to the item master." onClose={onClose}>
+      <div className="form-grid">
+        <Field label="Item Name">
+          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Chicken" />
+        </Field>
+        <Field label="Category">
+          <select value={category} onChange={(event) => setCategory(event.target.value as StockCategory)}>
+            {STOCK_CATEGORIES.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Unit">
+          <input value={unit} onChange={(event) => setUnit(event.target.value)} placeholder="e.g. kg, case, each" />
+        </Field>
+        <Field label="Supplier">
+          <select value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
+            {suppliers.map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {supplier.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Current Quantity">
+          <input min={0} onChange={(event) => setCurrentQuantity(Number(event.target.value))} type="number" value={currentQuantity} />
+        </Field>
+        <Field label="Average Cost (USD)">
+          <input min={0} onChange={(event) => setAverageCost(Number(event.target.value))} type="number" value={averageCost} />
+        </Field>
+        <Field label="Reorder Level">
+          <input min={0} onChange={(event) => setReorderLevel(Number(event.target.value))} type="number" value={reorderLevel} />
+        </Field>
+        <Field label="Min / Max Stock">
+          <div className="line-item-row">
+            <input min={0} onChange={(event) => setMinStock(Number(event.target.value))} type="number" value={minStock} />
+            <input min={0} onChange={(event) => setMaxStock(Number(event.target.value))} type="number" value={maxStock} />
+          </div>
+        </Field>
+      </div>
+
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button
+          className="primary-button"
+          disabled={!canSave}
+          onClick={() => onSave({ name, category, unit, supplierId, reorderLevel, minStock, maxStock, currentQuantity, averageCost })}
+          type="button"
+        >
+          Add Item
+        </button>
+      </div>
+    </Drawer>
+  );
+}
+
+function SupplierDrawer({ onClose, onSave }: { onClose: () => void; onSave: (values: SupplierFormValues) => void }) {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("");
+  const [contactPerson, setContactPerson] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [address, setAddress] = useState("");
+  const [taxNumber, setTaxNumber] = useState("");
+  const [preferred, setPreferred] = useState(false);
+  const [paymentTerms, setPaymentTerms] = useState("30 days");
+
+  const canSave = Boolean(name && category && contactPerson && phone);
+
+  return (
+    <Drawer title="New Supplier" description="Maintain the supplier database for purchase orders." onClose={onClose}>
+      <div className="form-grid">
+        <Field label="Supplier Name">
+          <input value={name} onChange={(event) => setName(event.target.value)} />
+        </Field>
+        <Field label="Category">
+          <input value={category} onChange={(event) => setCategory(event.target.value)} placeholder="e.g. Food & Produce" />
+        </Field>
+        <Field label="Contact Person">
+          <input value={contactPerson} onChange={(event) => setContactPerson(event.target.value)} />
+        </Field>
+        <Field label="Phone">
+          <input value={phone} onChange={(event) => setPhone(event.target.value)} />
+        </Field>
+        <Field label="Email (optional)">
+          <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" />
+        </Field>
+        <Field label="Payment Terms">
+          <input value={paymentTerms} onChange={(event) => setPaymentTerms(event.target.value)} placeholder="e.g. 30 days, COD" />
+        </Field>
+        <Field label="Physical Address (optional)">
+          <input value={address} onChange={(event) => setAddress(event.target.value)} />
+        </Field>
+        <Field label="Tax Number (optional)">
+          <input value={taxNumber} onChange={(event) => setTaxNumber(event.target.value)} />
+        </Field>
+      </div>
+
+      <label className="checkbox-row">
+        <input checked={preferred} onChange={(event) => setPreferred(event.target.checked)} type="checkbox" />
+        Preferred supplier
+      </label>
+
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button
+          className="primary-button"
+          disabled={!canSave}
+          onClick={() => onSave({ name, category, contactPerson, phone, email, address, taxNumber, preferred, paymentTerms })}
+          type="button"
+        >
+          Add Supplier
+        </button>
+      </div>
+    </Drawer>
+  );
+}
+
 type SearchResult = {
   key: string;
   kind: string;
@@ -5410,12 +6626,50 @@ function buildSearchResults(
   });
 
   state.purchaseRequests.forEach((request) => {
-    if (`${request.id} ${request.supplier} ${request.department}`.toLowerCase().includes(query)) {
+    const itemNames = request.items.map((item) => item.description).join(" ");
+    if (`${request.id} ${request.department} ${request.requestedBy} ${itemNames}`.toLowerCase().includes(query)) {
       results.push({
         key: `pr-${request.id}`,
         kind: "Purchase Request",
-        title: `${request.id} - ${request.supplier}`,
-        subtitle: request.description,
+        title: `${request.id} - ${request.department}`,
+        subtitle: request.reason,
+        onSelect: () => handlers.goTo("procurement"),
+      });
+    }
+  });
+
+  state.purchaseOrders.forEach((order) => {
+    const supplier = state.suppliers.find((item) => item.id === order.supplierId);
+    if (`${order.id} ${order.department} ${supplier?.name ?? ""}`.toLowerCase().includes(query)) {
+      results.push({
+        key: `po-${order.id}`,
+        kind: "Purchase Order",
+        title: `${order.id} - ${supplier?.name ?? "Unknown supplier"}`,
+        subtitle: `${order.department} - due ${order.deliveryDate}`,
+        onSelect: () => handlers.goTo("procurement"),
+      });
+    }
+  });
+
+  state.inventoryItems.forEach((item) => {
+    if (`${item.id} ${item.name} ${item.category}`.toLowerCase().includes(query)) {
+      results.push({
+        key: `itm-${item.id}`,
+        kind: "Stock Item",
+        title: item.name,
+        subtitle: `${item.currentQuantity} ${item.unit} in stock - ${item.category}`,
+        onSelect: () => handlers.goTo("procurement"),
+      });
+    }
+  });
+
+  state.suppliers.forEach((supplier) => {
+    if (`${supplier.id} ${supplier.name} ${supplier.category}`.toLowerCase().includes(query)) {
+      results.push({
+        key: `sup-${supplier.id}`,
+        kind: "Supplier",
+        title: supplier.name,
+        subtitle: `${supplier.category} - ${supplier.contactPerson}`,
         onSelect: () => handlers.goTo("procurement"),
       });
     }
