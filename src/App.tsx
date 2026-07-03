@@ -1,9 +1,12 @@
 import {
   Activity,
+  AlertTriangle,
+  Banknote,
   BedDouble,
   Bell,
   CalendarDays,
   ChefHat,
+  CheckCircle2,
   ClipboardCheck,
   ClipboardCopy,
   CreditCard,
@@ -12,7 +15,9 @@ import {
   Home,
   Hotel,
   KeyRound,
+  Landmark,
   LayoutDashboard,
+  Lock,
   LogOut,
   Menu,
   Minus,
@@ -27,7 +32,9 @@ import {
   ShoppingCart,
   Sparkles,
   Trash2,
+  TrendingUp,
   Utensils,
+  Wallet,
   Warehouse,
   X,
 } from "lucide-react";
@@ -495,6 +502,8 @@ type ActivityBooking = {
   instructor: string;
   status: "Booked" | "In Progress" | "Closed";
   price: number;
+  payment: "Cash" | "Card" | "Room Charge";
+  settledAt?: string;
   ageConfirmed: boolean;
   guardianPresent: boolean;
   weightKg?: number;
@@ -511,6 +520,7 @@ type ActivityBookingFormValues = {
   time: string;
   instructor: string;
   price: number;
+  payment: ActivityBooking["payment"];
   ageConfirmed: boolean;
   guardianPresent: boolean;
   weightKg: string;
@@ -639,12 +649,19 @@ type SafetyIncidentFormValues = {
   witnessName: string;
 };
 
-type CashControl = {
+type CashRegisterArea = "Reception" | "Restaurant" | "Bar" | "Conference";
+
+type CashRegister = {
   id: string;
-  area: string;
-  expected: number;
-  counted: number;
-  status: "Balanced" | "Variance" | "Pending";
+  area: CashRegisterArea;
+  businessDate: string;
+  openingFloat: number;
+  cashPaidOut: number;
+  refunds: number;
+  actualCash?: number;
+  approvedBy?: string;
+  countedAt?: string;
+  status: "Trading" | "Counted" | "Variance Approved";
 };
 
 type ReportRun = {
@@ -675,6 +692,51 @@ type Receipt = {
   time: string;
 };
 
+type ExpenseCategory =
+  | "Fuel"
+  | "Transport"
+  | "Procurement"
+  | "Repairs & Maintenance"
+  | "Cleaning Materials"
+  | "Consumables"
+  | "Utilities"
+  | "Other";
+
+type Expense = {
+  id: string;
+  category: ExpenseCategory;
+  department: string;
+  amount: number;
+  supplier?: string;
+  approvedBy: string;
+  reference?: string;
+  recordedBy: string;
+  date: string;
+  time: string;
+};
+
+type NightAuditStepId = "arrivals" | "checkouts" | "charges" | "restaurant" | "cash" | "reports";
+
+type NightAuditRun = {
+  id: string;
+  businessDate: string;
+  startedAt: string;
+  startedBy: string;
+  completedSteps: NightAuditStepId[];
+  completedAt?: string;
+  status: "In Progress" | "Completed";
+};
+
+type BusinessDayStatus = "Trading" | "Closed";
+
+type BusinessDayRecord = {
+  date: string;
+  status: BusinessDayStatus;
+  closedAt?: string;
+  closedBy?: string;
+  nightAuditRunId?: string;
+};
+
 type DemoState = {
   rooms: Room[];
   reservations: Reservation[];
@@ -695,14 +757,17 @@ type DemoState = {
   safetyIncidents: SafetyIncidentReport[];
   activityChecklists: ActivityDailyChecklist[];
   kitchenChecklists: KitchenClosingChecklist[];
-  cashControls: CashControl[];
+  cashRegisters: CashRegister[];
   reports: ReportRun[];
   receipts: Receipt[];
+  expenses: Expense[];
+  nightAuditRuns: NightAuditRun[];
+  businessDay: BusinessDayRecord;
   audit: AuditItem[];
   housekeepingChecklists: HousekeepingChecklist[];
 };
 
-const storageKey = "blue-hills-erp-demo-v6";
+const storageKey = "blue-hills-erp-demo-v7";
 
 const LODGE_ORDER: Lodge[] = ["Zebra", "Kudu", "Impala", "Dormitory"];
 
@@ -801,6 +866,32 @@ const STOCK_CATEGORIES: StockCategory[] = [
 const REQUEST_PRIORITIES: RequestPriority[] = ["Low", "Normal", "High", "Urgent"];
 
 const ADJUSTMENT_REASONS: AdjustmentReason[] = ["Damage", "Loss", "Expiry", "Theft", "Counting Error", "Manual Correction"];
+
+const EXPENSE_CATEGORIES: ExpenseCategory[] = [
+  "Fuel",
+  "Transport",
+  "Procurement",
+  "Repairs & Maintenance",
+  "Cleaning Materials",
+  "Consumables",
+  "Utilities",
+  "Other",
+];
+
+const CASH_REGISTER_AREAS: CashRegisterArea[] = ["Reception", "Restaurant", "Bar", "Conference"];
+
+const NIGHT_AUDIT_STEPS: Array<{ id: NightAuditStepId; title: string; description: string }> = [
+  { id: "arrivals", title: "Verify Arrivals", description: "Confirm every expected arrival is checked in or logged as a no-show." },
+  { id: "checkouts", title: "Verify Check-outs", description: "Ensure every departing guest has been checked out with a settled folio." },
+  {
+    id: "charges",
+    title: "Verify Guest Charges & Payments",
+    description: "Accommodation, restaurant & bar, and activities charges are posted, and cash/card/transfer payments reconcile.",
+  },
+  { id: "restaurant", title: "Verify Restaurant", description: "No open kitchen tickets and no unpaid orders remain on the floor." },
+  { id: "cash", title: "Cash Reconciliation", description: "Every cash register is counted and any variance is approved by a manager." },
+  { id: "reports", title: "Generate Reports", description: "Daily revenue, cash summary, guest ledger and outstanding accounts reports are produced." },
+];
 
 function computeLowStockAlerts(items: InventoryItem[]): LowStockAlert[] {
   return items
@@ -934,6 +1025,13 @@ type DashboardMetrics = {
   transfersToday: number;
   pendingStockMovements: number;
   openStockTakesWithVariance: number;
+  accommodationRevenueToday: number;
+  conferenceRevenueToday: number;
+  totalRevenueToday: number;
+  expensesToday: number;
+  outstandingBalance: number;
+  unresolvedCashVariances: number;
+  businessDayClosed: boolean;
 };
 
 function todayIsoDate() {
@@ -1201,6 +1299,7 @@ function summarizeRoomStatuses(rooms: Room[]): RoomStatusSummary {
 function buildDashboardMetrics(state: DemoState): DashboardMetrics {
   const latestChecklist = getLatestChecklist(state.housekeepingChecklists);
   const roomSummary = summarizeRoomStatuses(state.rooms);
+  const financeTotals = computeFinanceTotals(state);
 
   const arrivalsToday = state.reservations.filter(
     (reservation) => reservation.arrival === businessDateLabel && reservation.status !== "Checked In" && reservation.status !== "Cancelled",
@@ -1245,7 +1344,226 @@ function buildDashboardMetrics(state: DemoState): DashboardMetrics {
     openStockTakesWithVariance: state.stockTakes.filter(
       (stockTake) => stockTake.status === "Open" && stockTake.items.some((line) => line.countedQuantity !== line.expectedQuantity),
     ).length,
+    accommodationRevenueToday: financeTotals.accommodationRevenue,
+    conferenceRevenueToday: financeTotals.conferenceRevenue,
+    totalRevenueToday: financeTotals.totalRevenue,
+    expensesToday: financeTotals.expensesToday,
+    outstandingBalance: financeTotals.outstandingBalance,
+    unresolvedCashVariances: financeTotals.unresolvedVarianceCount,
+    businessDayClosed: state.businessDay.status === "Closed",
   };
+}
+
+// ---------------------------------------------------------------------------
+// Finance: guest folios, department revenue, cash reconciliation, alerts.
+// Every department posts revenue automatically here - no manual recapturing.
+// ---------------------------------------------------------------------------
+
+type GuestFolioLine = {
+  department: "Accommodation" | "Restaurant & Bar" | "Activities";
+  reference: string;
+  description: string;
+  amount: number;
+  settled: boolean;
+};
+
+type GuestFolio = {
+  lines: GuestFolioLine[];
+  nights: number;
+  accommodationTotal: number;
+  accommodationOutstanding: number;
+  restaurantOutstanding: number;
+  activitiesOutstanding: number;
+  totalCharges: number;
+  totalOutstanding: number;
+};
+
+function buildGuestFolio(state: DemoState, reservation: Reservation): GuestFolio {
+  const nights = Math.max(1, dates.indexOf(reservation.departure) - dates.indexOf(reservation.arrival));
+  const rate = reservation.rate ?? 0;
+  const accommodationTotal = nights * rate;
+
+  const roomOrders = state.orders.filter((order) => order.guest === reservation.guest && order.payment === "Room Charge");
+  const roomActivities = state.activities.filter((booking) => booking.guest === reservation.guest && booking.payment === "Room Charge");
+
+  const lines: GuestFolioLine[] = [
+    {
+      department: "Accommodation",
+      reference: reservation.id,
+      description: `${nights} night${nights === 1 ? "" : "s"} in ${reservation.room} @ ${money.format(rate)}`,
+      amount: accommodationTotal,
+      settled: reservation.balance === 0,
+    },
+    ...roomOrders.map((order) => ({
+      department: "Restaurant & Bar" as const,
+      reference: order.id,
+      description: order.items.map((item) => `${item.quantity}x ${item.name}`).join(", "),
+      amount: order.total,
+      settled: Boolean(order.settledAt),
+    })),
+    ...roomActivities.map((booking) => ({
+      department: "Activities" as const,
+      reference: booking.id,
+      description: `${booking.activity} (${booking.participants} pax)`,
+      amount: booking.price,
+      settled: Boolean(booking.settledAt),
+    })),
+  ];
+
+  const restaurantOutstanding = roomOrders.filter((order) => !order.settledAt).reduce((sum, order) => sum + order.total, 0);
+  const activitiesOutstanding = roomActivities.filter((booking) => !booking.settledAt).reduce((sum, booking) => sum + booking.price, 0);
+  const totalCharges = lines.reduce((sum, line) => sum + line.amount, 0);
+
+  return {
+    lines,
+    nights,
+    accommodationTotal,
+    accommodationOutstanding: reservation.balance,
+    restaurantOutstanding,
+    activitiesOutstanding,
+    totalCharges,
+    totalOutstanding: reservation.balance + restaurantOutstanding + activitiesOutstanding,
+  };
+}
+
+function computeExpectedCash(state: DemoState, register: CashRegister): number {
+  let received = 0;
+  if (register.area === "Reception") {
+    received =
+      state.receipts.filter((receipt) => receipt.method === "Cash").reduce((sum, receipt) => sum + receipt.amount, 0) +
+      state.activities.filter((booking) => booking.payment === "Cash").reduce((sum, booking) => sum + booking.price, 0);
+  } else if (register.area === "Restaurant") {
+    received = state.orders
+      .filter((order) => order.payment === "Cash" && !order.containsAlcohol)
+      .reduce((sum, order) => sum + order.total, 0);
+  } else if (register.area === "Bar") {
+    received = state.orders
+      .filter((order) => order.payment === "Cash" && order.containsAlcohol)
+      .reduce((sum, order) => sum + order.total, 0);
+  }
+  return register.openingFloat + received - register.cashPaidOut - register.refunds;
+}
+
+function computeCashVariance(state: DemoState, register: CashRegister): number {
+  if (register.actualCash === undefined) return 0;
+  return Number((register.actualCash - computeExpectedCash(state, register)).toFixed(2));
+}
+
+type FinanceTotals = {
+  accommodationRevenue: number;
+  conferenceRevenue: number;
+  restaurantRevenue: number;
+  activitiesRevenue: number;
+  totalRevenue: number;
+  cashReceived: number;
+  cardReceived: number;
+  transferReceived: number;
+  ecocashReceived: number;
+  expensesToday: number;
+  netRevenue: number;
+  outstandingBalance: number;
+  cashVarianceTotal: number;
+  unresolvedVarianceCount: number;
+};
+
+function computeFinanceTotals(state: DemoState): FinanceTotals {
+  const businessIndex = dates.indexOf(businessDateLabel);
+  const tradingReservations = state.reservations.filter(
+    (reservation) =>
+      reservation.status !== "Cancelled" &&
+      businessIndex >= dates.indexOf(reservation.arrival) &&
+      businessIndex < dates.indexOf(reservation.departure),
+  );
+  const accommodationRevenue = tradingReservations
+    .filter((reservation) => reservation.purpose !== "Conference Group")
+    .reduce((sum, reservation) => sum + (reservation.rate ?? 0), 0);
+  const conferenceRevenue = tradingReservations
+    .filter((reservation) => reservation.purpose === "Conference Group")
+    .reduce((sum, reservation) => sum + (reservation.rate ?? 0), 0);
+  const restaurantRevenue = state.orders.reduce((sum, order) => sum + order.total, 0);
+  const activitiesRevenue = state.activities
+    .filter((booking) => booking.date === businessDateLabel)
+    .reduce((sum, booking) => sum + booking.price, 0);
+  const totalRevenue = accommodationRevenue + conferenceRevenue + restaurantRevenue + activitiesRevenue;
+
+  const paymentTotal = (method: PaymentMethod) =>
+    state.receipts.filter((receipt) => receipt.method === method).reduce((sum, receipt) => sum + receipt.amount, 0) +
+    state.orders.filter((order) => order.payment === method).reduce((sum, order) => sum + order.total, 0) +
+    state.activities.filter((booking) => booking.payment === method).reduce((sum, booking) => sum + booking.price, 0);
+
+  const expensesToday = state.expenses.filter((expense) => expense.date === businessDateIso).reduce((sum, expense) => sum + expense.amount, 0);
+
+  const outstandingBalance =
+    state.reservations.reduce((sum, reservation) => sum + reservation.balance, 0) +
+    state.orders.filter((order) => order.payment === "Room Charge" && !order.settledAt).reduce((sum, order) => sum + order.total, 0) +
+    state.activities.filter((booking) => booking.payment === "Room Charge" && !booking.settledAt).reduce((sum, booking) => sum + booking.price, 0);
+
+  const variances = state.cashRegisters.map((register) => computeCashVariance(state, register));
+  const cashVarianceTotal = variances.reduce((sum, variance) => sum + Math.abs(variance), 0);
+  const unresolvedVarianceCount = state.cashRegisters.filter(
+    (register) => register.actualCash !== undefined && computeCashVariance(state, register) !== 0 && register.status !== "Variance Approved",
+  ).length;
+
+  return {
+    accommodationRevenue,
+    conferenceRevenue,
+    restaurantRevenue,
+    activitiesRevenue,
+    totalRevenue,
+    cashReceived: paymentTotal("Cash"),
+    cardReceived: paymentTotal("Card"),
+    transferReceived: paymentTotal("Bank Transfer"),
+    ecocashReceived: paymentTotal("Ecocash"),
+    expensesToday,
+    netRevenue: totalRevenue - expensesToday,
+    outstandingBalance,
+    cashVarianceTotal,
+    unresolvedVarianceCount,
+  };
+}
+
+type FinanceAlert = { key: string; icon: LucideIcon; title: string; description: string };
+
+function computeFinanceAlerts(state: DemoState): FinanceAlert[] {
+  const alerts: FinanceAlert[] = [];
+
+  const unresolvedVariances = state.cashRegisters.filter(
+    (register) => register.actualCash !== undefined && computeCashVariance(state, register) !== 0 && register.status !== "Variance Approved",
+  );
+  if (unresolvedVariances.length > 0) {
+    alerts.push({
+      key: "cash-variance",
+      icon: AlertTriangle,
+      title: `${unresolvedVariances.length} cash register${unresolvedVariances.length > 1 ? "s" : ""} with unresolved variance`,
+      description: unresolvedVariances
+        .map((register) => `${register.area} (${money.format(computeCashVariance(state, register))})`)
+        .join(", "),
+    });
+  }
+
+  const departingWithBalance = state.reservations.filter((reservation) => reservation.departure === businessDateLabel && reservation.balance > 0);
+  if (departingWithBalance.length > 0) {
+    alerts.push({
+      key: "outstanding-departures",
+      icon: FileText,
+      title: `${departingWithBalance.length} departing guest${departingWithBalance.length > 1 ? "s" : ""} with an outstanding balance`,
+      description: departingWithBalance.map((reservation) => `${reservation.guest} (${money.format(reservation.balance)})`).join(", "),
+    });
+  }
+
+  const openRoomCharges = [
+    ...state.orders.filter((order) => order.payment === "Room Charge" && !order.settledAt && order.kitchenStatus === "Completed"),
+  ];
+  if (state.businessDay.status === "Trading" && !state.nightAuditRuns.some((run) => run.businessDate === businessDateIso && run.status === "In Progress")) {
+    alerts.push({
+      key: "night-audit-not-started",
+      icon: ClipboardCheck,
+      title: "Night audit not yet started for today's business date",
+      description: `Business date ${businessDateLabel} is still open - ${openRoomCharges.length} settled kitchen ticket${openRoomCharges.length === 1 ? "" : "s"} still on room accounts.`,
+    });
+  }
+
+  return alerts;
 }
 
 function formatChecklistDateLabel(date: string) {
@@ -1387,6 +1705,7 @@ function createSeedState(): DemoState {
         containsAlcohol: true,
         ageVerified: true,
         placedAt: "09:05",
+        settledAt: "09:05",
       },
     ],
     suppliers: [
@@ -1650,13 +1969,14 @@ function createSeedState(): DemoState {
       {
         id: "ACT-514",
         activity: "Quad Bike",
-        guest: "Ncube Holdings",
+        guest: "Blessing Ncube",
         participants: 2,
         date: "Jul 03",
         time: "10:30",
         instructor: "Tawanda",
         status: "Booked",
         price: 60,
+        payment: "Room Charge",
         ageConfirmed: true,
         guardianPresent: false,
         medicalClear: true,
@@ -1672,6 +1992,8 @@ function createSeedState(): DemoState {
         instructor: "Chipo",
         status: "In Progress",
         price: 45,
+        payment: "Cash",
+        settledAt: "13:55",
         ageConfirmed: true,
         guardianPresent: false,
         weightKg: 68,
@@ -1829,10 +2151,11 @@ function createSeedState(): DemoState {
         status: "Resolved",
       },
     ],
-    cashControls: [
-      { id: "CASH-1", area: "Front Office Float", expected: 200, counted: 200, status: "Balanced" },
-      { id: "CASH-2", area: "Restaurant Cash Drop", expected: 410, counted: 395, status: "Variance" },
-      { id: "CASH-3", area: "Bar Register", expected: 285, counted: 0, status: "Pending" },
+    cashRegisters: [
+      { id: "CASH-1", area: "Reception", businessDate: businessDateIso, openingFloat: 200, cashPaidOut: 0, refunds: 0, status: "Trading" },
+      { id: "CASH-2", area: "Restaurant", businessDate: businessDateIso, openingFloat: 100, cashPaidOut: 15, refunds: 0, status: "Trading" },
+      { id: "CASH-3", area: "Bar", businessDate: businessDateIso, openingFloat: 100, cashPaidOut: 0, refunds: 0, status: "Trading" },
+      { id: "CASH-4", area: "Conference", businessDate: businessDateIso, openingFloat: 50, cashPaidOut: 0, refunds: 0, status: "Trading" },
     ],
     reports: [
       { id: "REP-1", report: "In-house guests by room", schedule: "10:00, 13:00, 17:00, 22:00", status: "Printed" },
@@ -1864,6 +2187,34 @@ function createSeedState(): DemoState {
         time: "08:40",
       },
     ],
+    expenses: [
+      {
+        id: "EXP-1",
+        category: "Fuel",
+        department: "Transport",
+        amount: 45,
+        supplier: "Puma Zimbabwe",
+        approvedBy: "General Manager",
+        reference: "FUEL-0702",
+        recordedBy: "Finance",
+        date: businessDateIso,
+        time: "07:40",
+      },
+      {
+        id: "EXP-2",
+        category: "Cleaning Materials",
+        department: "Housekeeping",
+        amount: 32,
+        supplier: "Chinda Wholesalers",
+        approvedBy: "Front Office Manager",
+        reference: "GRN-4471",
+        recordedBy: "Finance",
+        date: businessDateIso,
+        time: "08:15",
+      },
+    ],
+    nightAuditRuns: [],
+    businessDay: { date: businessDateIso, status: "Trading" },
     audit: [
       { id: "A1", text: "Reservation RSV-1042 checked in", user: "Reception", time: "09:10" },
       { id: "A2", text: "Kitchen accepted KOT-221", user: "Chef", time: "09:18" },
@@ -1914,21 +2265,19 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { state, save, withAudit } = useLocalDemoState();
 
+  const financeTotals = useMemo(() => computeFinanceTotals(state), [state]);
+  const financeAlerts = useMemo(() => computeFinanceAlerts(state), [state]);
+
   const totals = useMemo(() => {
     const occupied = state.rooms.filter((room) => room.status === "Occupied").length;
-    const revenue =
-      state.orders.reduce((sum, order) => sum + order.total, 0) +
-      state.reservations.reduce((sum, reservation) => sum + (reservation.balance === 0 ? 320 : 0), 0) +
-      state.activities.filter((booking) => booking.date === businessDateLabel).reduce((sum, booking) => sum + booking.price, 0);
-    const outstanding = state.reservations.reduce((sum, reservation) => sum + reservation.balance, 0);
 
     return {
       occupancy: Math.round((occupied / state.rooms.length) * 100),
       arrivals: state.reservations.filter((reservation) => reservation.arrival === tomorrowDateLabel).length,
-      revenue,
-      outstanding,
+      revenue: financeTotals.totalRevenue,
+      outstanding: financeTotals.outstandingBalance,
     };
-  }, [state]);
+  }, [state, financeTotals]);
 
   const stockAlerts = useMemo(() => computeStockAlerts(getLatestChecklist(state.housekeepingChecklists)), [state.housekeepingChecklists]);
 
@@ -1962,6 +2311,10 @@ function App() {
   const [stockAdjustmentDrawerOpen, setStockAdjustmentDrawerOpen] = useState(false);
   const [stockTakeDrawerOpen, setStockTakeDrawerOpen] = useState(false);
   const [stockTakeDetail, setStockTakeDetail] = useState<StockTake | null>(null);
+  const [expenseDrawerOpen, setExpenseDrawerOpen] = useState(false);
+  const [cashRegisterModalId, setCashRegisterModalId] = useState<string | null>(null);
+  const [nightAuditOpen, setNightAuditOpen] = useState(false);
+  const [receivePaymentModalOpen, setReceivePaymentModalOpen] = useState(false);
 
   const openNewReservation = () => {
     setReservationPrefill(null);
@@ -2139,6 +2492,7 @@ function App() {
     if (!reservation) return;
 
     const receipt = makeReceipt(reservation, { amount: details.total, method: details.paymentMethod, purpose: "Full Settlement", balanceAfter: 0 });
+    const settledAt = nowTime();
 
     withAudit(
       {
@@ -2154,6 +2508,12 @@ function App() {
           ...state.keyLogs,
         ],
         receipts: [receipt, ...state.receipts],
+        orders: state.orders.map((order) =>
+          order.guest === reservation.guest && order.payment === "Room Charge" && !order.settledAt ? { ...order, settledAt } : order,
+        ),
+        activities: state.activities.map((booking) =>
+          booking.guest === reservation.guest && booking.payment === "Room Charge" && !booking.settledAt ? { ...booking, settledAt } : booking,
+        ),
       },
       `${id} checked out, receipt ${receipt.id} for ${money.format(details.total)} settled via ${details.paymentMethod}, housekeeping notified`,
       "Reception",
@@ -2248,6 +2608,7 @@ function App() {
       containsAlcohol,
       ageVerified: containsAlcohol ? values.ageVerified : true,
       placedAt: nowTime(),
+      settledAt: values.payment === "Room Charge" ? undefined : nowTime(),
     };
 
     withAudit(
@@ -2748,6 +3109,8 @@ function App() {
       instructor: values.instructor,
       status: "Booked",
       price: values.price,
+      payment: values.payment,
+      settledAt: values.payment === "Room Charge" ? undefined : nowTime(),
       ageConfirmed: values.ageConfirmed,
       guardianPresent: values.guardianPresent,
       weightKg: values.weightKg ? Number(values.weightKg) : undefined,
@@ -2846,6 +3209,119 @@ function App() {
       `${report.report} generated for department collection`,
       "Night Audit",
     );
+  };
+
+  const recordExpense = (values: {
+    category: ExpenseCategory;
+    department: string;
+    amount: number;
+    supplier: string;
+    approvedBy: string;
+    reference: string;
+    recordedBy: string;
+  }) => {
+    if (values.amount <= 0 || !values.approvedBy || !values.recordedBy) return;
+    const id = `EXP-${state.expenses.length + 1 + Math.floor(Math.random() * 90)}`;
+    const expense: Expense = {
+      id,
+      category: values.category,
+      department: values.department,
+      amount: values.amount,
+      supplier: values.supplier || undefined,
+      approvedBy: values.approvedBy,
+      reference: values.reference || undefined,
+      recordedBy: values.recordedBy,
+      date: businessDateIso,
+      time: nowTime(),
+    };
+
+    withAudit(
+      { ...state, expenses: [expense, ...state.expenses] },
+      `${id} recorded: ${values.category} expense of ${money.format(values.amount)} for ${values.department}, approved by ${values.approvedBy}`,
+      values.recordedBy,
+    );
+    setExpenseDrawerOpen(false);
+  };
+
+  const countCashRegister = (id: string, actualCash: number, approvedBy: string) => {
+    const register = state.cashRegisters.find((item) => item.id === id);
+    if (!register) return;
+
+    const expected = computeExpectedCash(state, register);
+    const variance = Number((actualCash - expected).toFixed(2));
+    const status: CashRegister["status"] = variance === 0 ? "Counted" : approvedBy ? "Variance Approved" : "Counted";
+
+    withAudit(
+      {
+        ...state,
+        cashRegisters: state.cashRegisters.map((item) =>
+          item.id === id ? { ...item, actualCash, countedAt: nowTime(), approvedBy: approvedBy || undefined, status } : item,
+        ),
+      },
+      `${register.area} register counted: expected ${money.format(expected)}, actual ${money.format(actualCash)}${
+        variance !== 0 ? ` (variance ${money.format(variance)}${approvedBy ? `, approved by ${approvedBy}` : ", awaiting manager approval"})` : ""
+      }`,
+      "Finance",
+    );
+    setCashRegisterModalId(null);
+  };
+
+  const activeNightAuditRun = state.nightAuditRuns.find((run) => run.businessDate === businessDateIso && run.status === "In Progress") ?? null;
+
+  const startNightAudit = (startedBy: string) => {
+    if (state.businessDay.status === "Closed" || activeNightAuditRun || !startedBy) return;
+    const id = `NA-${state.nightAuditRuns.length + 1}`;
+    const run: NightAuditRun = { id, businessDate: businessDateIso, startedAt: nowTime(), startedBy, completedSteps: [], status: "In Progress" };
+
+    withAudit(
+      { ...state, nightAuditRuns: [run, ...state.nightAuditRuns] },
+      `Night audit ${id} started by ${startedBy} for business date ${businessDateLabel}`,
+      startedBy,
+    );
+  };
+
+  const toggleNightAuditStep = (runId: string, step: NightAuditStepId) => {
+    const run = state.nightAuditRuns.find((item) => item.id === runId);
+    if (!run || run.status === "Completed") return;
+    const completedSteps = run.completedSteps.includes(step)
+      ? run.completedSteps.filter((item) => item !== step)
+      : [...run.completedSteps, step];
+
+    withAudit(
+      { ...state, nightAuditRuns: state.nightAuditRuns.map((item) => (item.id === runId ? { ...item, completedSteps } : item)) },
+      `Night audit ${runId} step "${NIGHT_AUDIT_STEPS.find((item) => item.id === step)?.title ?? step}" ${completedSteps.includes(step) ? "verified" : "unverified"}`,
+      "Night Audit",
+    );
+  };
+
+  const closeBusinessDay = (closedBy: string) => {
+    if (state.businessDay.status === "Closed" || !activeNightAuditRun || !closedBy) return;
+    const allStepsVerified = NIGHT_AUDIT_STEPS.every((step) => activeNightAuditRun.completedSteps.includes(step.id));
+    if (!allStepsVerified) return;
+
+    const openTickets = state.orders.filter((order) => order.kitchenStatus !== "Completed").length;
+    const openFolios = state.reservations.filter(
+      (reservation) => reservation.departure === businessDateLabel && reservation.status !== "Checked Out" && reservation.status !== "Cancelled",
+    ).length;
+    const uncountedRegisters = state.cashRegisters.filter((register) => register.actualCash === undefined).length;
+    const unresolvedVariances = state.cashRegisters.filter(
+      (register) => register.actualCash !== undefined && computeCashVariance(state, register) !== 0 && register.status !== "Variance Approved",
+    ).length;
+
+    if (openTickets > 0 || openFolios > 0 || uncountedRegisters > 0 || unresolvedVariances > 0) return;
+
+    withAudit(
+      {
+        ...state,
+        nightAuditRuns: state.nightAuditRuns.map((run) =>
+          run.id === activeNightAuditRun.id ? { ...run, status: "Completed", completedAt: nowTime() } : run,
+        ),
+        businessDay: { date: businessDateIso, status: "Closed", closedAt: nowTime(), closedBy, nightAuditRunId: activeNightAuditRun.id },
+      },
+      `Business date ${businessDateLabel} closed by ${closedBy}. Night audit ${activeNightAuditRun.id} archived, reports generated, ready to open the next business date.`,
+      closedBy,
+    );
+    setNightAuditOpen(false);
   };
 
   const searchResults = useMemo(
@@ -2957,7 +3433,7 @@ function App() {
         </header>
 
         {activeModule === "dashboard" && (
-          <Dashboard state={state} totals={totals} stockAlerts={stockAlerts} metrics={dashboardMetrics} />
+          <Dashboard state={state} totals={totals} stockAlerts={stockAlerts} metrics={dashboardMetrics} financeAlerts={financeAlerts} />
         )}
         {activeModule === "frontOffice" && (
           <FrontOffice
@@ -3024,7 +3500,18 @@ function App() {
             onOpenStockTakeDetail={setStockTakeDetail}
           />
         )}
-        {activeModule === "finance" && <Finance state={state} totals={totals} onMarkReportPrinted={markReportPrinted} />}
+        {activeModule === "finance" && (
+          <Finance
+            state={state}
+            financeTotals={financeTotals}
+            alerts={financeAlerts}
+            onMarkReportPrinted={markReportPrinted}
+            onOpenExpenseDrawer={() => setExpenseDrawerOpen(true)}
+            onOpenCashRegister={setCashRegisterModalId}
+            onOpenNightAudit={() => setNightAuditOpen(true)}
+            onOpenReceivePayment={() => setReceivePaymentModalOpen(true)}
+          />
+        )}
       </main>
 
       {reservationDrawer && (
@@ -3045,7 +3532,7 @@ function App() {
           }}
           onRecordPayment={recordPayment}
           onSave={saveReservation}
-          orders={state.orders}
+          state={state}
           prefill={reservationPrefill}
           reservation={activeReservation}
           rooms={state.rooms}
@@ -3055,7 +3542,7 @@ function App() {
       {checkInTarget && <CheckInModal onClose={() => setCheckInReservationId(null)} onConfirm={confirmCheckIn} reservation={checkInTarget} />}
 
       {checkOutTarget && (
-        <CheckOutDrawer onClose={() => setCheckOutReservationId(null)} onConfirm={confirmCheckOut} orders={state.orders} reservation={checkOutTarget} />
+        <CheckOutDrawer onClose={() => setCheckOutReservationId(null)} onConfirm={confirmCheckOut} state={state} reservation={checkOutTarget} />
       )}
 
       {enquiryModalOpen && <EnquiryModal onClose={() => setEnquiryModalOpen(false)} onCreate={createEnquiry} />}
@@ -3155,6 +3642,37 @@ function App() {
       )}
 
       {stockTakeDetail && <StockTakeDetailModal stockTake={stockTakeDetail} onClose={() => setStockTakeDetail(null)} />}
+
+      {expenseDrawerOpen && <ExpenseDrawer onClose={() => setExpenseDrawerOpen(false)} onSave={recordExpense} />}
+
+      {cashRegisterModalId && (
+        <CashRegisterModal
+          register={state.cashRegisters.find((item) => item.id === cashRegisterModalId) ?? null}
+          expected={
+            state.cashRegisters.find((item) => item.id === cashRegisterModalId)
+              ? computeExpectedCash(state, state.cashRegisters.find((item) => item.id === cashRegisterModalId)!)
+              : 0
+          }
+          onClose={() => setCashRegisterModalId(null)}
+          onSave={countCashRegister}
+        />
+      )}
+
+      {nightAuditOpen && (
+        <NightAuditWizard
+          state={state}
+          activeRun={activeNightAuditRun}
+          onClose={() => setNightAuditOpen(false)}
+          onStart={startNightAudit}
+          onToggleStep={toggleNightAuditStep}
+          onGenerateReports={() => state.reports.filter((report) => report.status === "Ready").forEach((report) => markReportPrinted(report.id))}
+          onCloseBusinessDay={closeBusinessDay}
+        />
+      )}
+
+      {receivePaymentModalOpen && (
+        <ReceivePaymentModal reservations={state.reservations.filter((r) => r.balance > 0)} onClose={() => setReceivePaymentModalOpen(false)} onSave={recordPayment} />
+      )}
     </div>
   );
 }
@@ -3164,13 +3682,15 @@ function Dashboard({
   totals,
   stockAlerts,
   metrics,
+  financeAlerts,
 }: {
   state: DemoState;
   totals: { occupancy: number; arrivals: number; revenue: number; outstanding: number };
   stockAlerts: StockAlert[];
   metrics: DashboardMetrics;
+  financeAlerts: FinanceAlert[];
 }) {
-  const attentionItems: Array<{ key: string; icon: LucideIcon; title: string; description: string }> = [];
+  const attentionItems: Array<{ key: string; icon: LucideIcon; title: string; description: string }> = [...financeAlerts];
 
   if (metrics.pendingPurchases > 0) {
     const pending = state.purchaseRequests.find((request) => request.status === "Pending Approval");
@@ -3377,7 +3897,13 @@ function Dashboard({
           icon={DoorOpen}
           trend={`${metrics.arrivalsToday.length} arriving today`}
         />
-        <KpiCard label="Revenue Today" value={money.format(totals.revenue)} helper="Accommodation and POS" icon={Receipt} trend={`${metrics.inHouseGuests.length} in-house`} />
+        <KpiCard
+          label="Revenue Today"
+          value={money.format(totals.revenue)}
+          helper="Accommodation, restaurant, activities & conference"
+          icon={Receipt}
+          trend={`${metrics.inHouseGuests.length} in-house`}
+        />
         <KpiCard
           label="Outstanding"
           value={money.format(totals.outstanding)}
@@ -3417,6 +3943,14 @@ function Dashboard({
           icon={Warehouse}
           trend={`${metrics.transfersToday} transfer${metrics.transfersToday === 1 ? "" : "s"} today`}
           tone={metrics.lowStockCount > 0 ? "danger" : undefined}
+        />
+        <KpiCard
+          label="Business Day"
+          value={metrics.businessDayClosed ? "Closed" : "Trading"}
+          helper={`Expenses today ${money.format(metrics.expensesToday)}`}
+          icon={metrics.businessDayClosed ? Lock : Landmark}
+          trend={metrics.unresolvedCashVariances > 0 ? `${metrics.unresolvedCashVariances} cash variance(s) unresolved` : "All registers reconciled"}
+          tone={metrics.unresolvedCashVariances > 0 ? "danger" : metrics.businessDayClosed ? "success" : undefined}
         />
       </div>
 
@@ -3958,7 +4492,7 @@ function RestaurantKitchen({
                 <div className="ticket-footer">
                   <span>{money.format(order.total)}</span>
                   {order.kitchenStatus === "Completed" ? (
-                    <Badge label={order.settledAt ? `Settled ${order.settledAt}` : "Settled"} />
+                    <Badge label={order.settledAt ? `Settled ${order.settledAt}` : "On Room Account"} />
                   ) : (
                     <button className="primary-button small" onClick={() => onAdvanceKitchen(order.id)} type="button">
                       Advance
@@ -4240,6 +4774,7 @@ function Operations({
               <th>Date &amp; Time</th>
               <th>Instructor</th>
               <th>Price</th>
+              <th>Payment</th>
               <th>Eligibility</th>
               <th>Status</th>
             </tr>
@@ -4247,7 +4782,7 @@ function Operations({
           <tbody>
             {state.activities.length === 0 && (
               <tr>
-                <td colSpan={9}>
+                <td colSpan={10}>
                   <p className="muted">No activities booked yet. Create the first booking.</p>
                 </td>
               </tr>
@@ -4263,6 +4798,9 @@ function Operations({
                 </td>
                 <td>{booking.instructor}</td>
                 <td>{money.format(booking.price)}</td>
+                <td>
+                  <Badge label={booking.payment === "Room Charge" && !booking.settledAt ? "On Room Account" : "Paid"} />
+                </td>
                 <td>
                   {booking.ageConfirmed && booking.medicalClear && booking.indemnitySigned ? (
                     <Badge label="Cleared" />
@@ -4842,42 +5380,308 @@ function Procurement({
 
 function Finance({
   state,
-  totals,
+  financeTotals,
+  alerts,
   onMarkReportPrinted,
+  onOpenExpenseDrawer,
+  onOpenCashRegister,
+  onOpenNightAudit,
+  onOpenReceivePayment,
 }: {
   state: DemoState;
-  totals: { occupancy: number; arrivals: number; revenue: number; outstanding: number };
+  financeTotals: FinanceTotals;
+  alerts: FinanceAlert[];
   onMarkReportPrinted: (id: string) => void;
+  onOpenExpenseDrawer: () => void;
+  onOpenCashRegister: (id: string) => void;
+  onOpenNightAudit: () => void;
+  onOpenReceivePayment: () => void;
 }) {
+  const ledgerReservations = state.reservations.filter((reservation) => {
+    if (reservation.status === "Cancelled") return false;
+    if (reservation.status === "Checked In") return true;
+    if (reservation.status === "Checked Out") return reservation.departure === businessDateLabel;
+    return reservation.balance > 0;
+  });
+
+  const transactions = [
+    ...state.receipts.map((receipt) => ({
+      key: receipt.id,
+      time: receipt.time,
+      description: `${receipt.purpose} - ${receipt.guest}`,
+      amount: receipt.amount,
+      positive: true,
+    })),
+    ...state.expenses
+      .filter((expense) => expense.date === businessDateIso)
+      .map((expense) => ({
+        key: expense.id,
+        time: expense.time,
+        description: `${expense.category} - ${expense.department}`,
+        amount: expense.amount,
+        positive: false,
+      })),
+  ].sort((a, b) => b.time.localeCompare(a.time));
+
   return (
-    <Page title="Finance & Night Audit" description="Daily revenue, expenses, cash summary, verification, and close of business day." action="Close Business Day" icon={LogOut}>
+    <Page
+      title="Finance & Night Audit"
+      description={`Business date ${businessDateLabel} - department revenue, guest ledger, cash reconciliation and business day closure.`}
+      action={state.businessDay.status === "Closed" ? "Business Day Closed" : "Night Audit & Close Business Day"}
+      onAction={onOpenNightAudit}
+      icon={LogOut}
+    >
+      {alerts.length > 0 && (
+        <section className="panel">
+          <PanelHeader title="Finance Attention Queue" subtitle="Live checks pulled from every department - nothing here is hardcoded." />
+          <div className="stack">
+            {alerts.map((alert) => (
+              <Attention key={alert.key} icon={alert.icon} title={alert.title} description={alert.description} />
+            ))}
+          </div>
+        </section>
+      )}
+
       <div className="kpi-grid">
-        <KpiCard label="Accommodation" value={money.format(640)} helper="Posted room charges" icon={Hotel} />
-        <KpiCard label="Restaurant & Bar" value={money.format(state.orders.reduce((sum, order) => sum + order.total, 0))} helper="POS sales today" icon={Utensils} />
-        <KpiCard label="Outstanding" value={money.format(totals.outstanding)} helper="Balances before checkout" icon={FileText} tone="danger" />
-        <KpiCard label="Cash Review" value="Ready" helper="Night audit checklist" icon={ClipboardCheck} tone="success" />
+        <KpiCard label="Today's Revenue" value={money.format(financeTotals.totalRevenue)} helper="Accommodation, restaurant, activities & conference" icon={TrendingUp} />
+        <KpiCard label="Cash Received" value={money.format(financeTotals.cashReceived)} helper="Cash across all outlets" icon={Banknote} />
+        <KpiCard label="Card Payments" value={money.format(financeTotals.cardReceived)} helper="Visa / Mastercard" icon={CreditCard} />
+        <KpiCard label="Bank & EcoCash" value={money.format(financeTotals.transferReceived + financeTotals.ecocashReceived)} helper="Transfers and EcoCash" icon={Landmark} />
+        <KpiCard
+          label="Outstanding Balances"
+          value={money.format(financeTotals.outstandingBalance)}
+          helper="Guest balances still due"
+          icon={FileText}
+          tone={financeTotals.outstandingBalance > 0 ? "danger" : "success"}
+        />
+        <KpiCard label="Expenses Today" value={money.format(financeTotals.expensesToday)} helper="Operating costs recorded today" icon={Wallet} tone={financeTotals.expensesToday > 0 ? "warning" : undefined} />
+        <KpiCard
+          label="Net Revenue"
+          value={money.format(financeTotals.netRevenue)}
+          helper="Revenue less today's expenses"
+          icon={CheckCircle2}
+          tone={financeTotals.netRevenue >= 0 ? "success" : "danger"}
+        />
+        <KpiCard
+          label="Cash Variance"
+          value={money.format(financeTotals.cashVarianceTotal)}
+          helper={financeTotals.unresolvedVarianceCount > 0 ? `${financeTotals.unresolvedVarianceCount} register(s) unresolved` : "All registers reconciled"}
+          icon={AlertTriangle}
+          tone={financeTotals.unresolvedVarianceCount > 0 ? "danger" : "success"}
+        />
+      </div>
+
+      <div className="button-row finance-quick-actions">
+        <button className="primary-button" onClick={onOpenReceivePayment} type="button">
+          <Wallet size={16} />
+          Receive Payment
+        </button>
+        <button className="secondary-button" onClick={onOpenExpenseDrawer} type="button">
+          <Receipt size={16} />
+          Record Expense
+        </button>
+        <button className="secondary-button" onClick={onOpenNightAudit} type="button">
+          <ClipboardCheck size={16} />
+          Night Audit
+        </button>
+      </div>
+
+      <div className="content-grid">
+        <section className="panel">
+          <PanelHeader title="Department Revenue" subtitle={`Business date ${businessDateLabel}`} />
+          <RevenueBarList
+            rows={[
+              { label: "Accommodation", value: financeTotals.accommodationRevenue },
+              { label: "Restaurant & Bar", value: financeTotals.restaurantRevenue },
+              { label: "Activities", value: financeTotals.activitiesRevenue },
+              { label: "Conference", value: financeTotals.conferenceRevenue },
+            ]}
+          />
+        </section>
+        <section className="panel">
+          <PanelHeader title="Payment Methods" subtitle="Collected across all outlets today" />
+          <RevenueBarList
+            rows={[
+              { label: "Cash", value: financeTotals.cashReceived },
+              { label: "Card", value: financeTotals.cardReceived },
+              { label: "Bank Transfer", value: financeTotals.transferReceived },
+              { label: "EcoCash", value: financeTotals.ecocashReceived },
+            ]}
+          />
+        </section>
       </div>
 
       <section className="panel">
-        <PanelHeader title="Night Audit Checklist" subtitle="Reception verifies the full day before opening the next business date." />
-        <div className="checklist">
-          {[
-            "Take shift handover and count opening float",
-            "Balance F&B outlet reports against POS and manual receipts",
-            "Investigate missing checks, duplicate postings and voids",
-            "Verify check-ins and check-outs",
-            "Verify accommodation payments",
-            "Verify restaurant and bar sales",
-            "Verify activities revenue",
-            "Check rate variance and zero-rate rooms",
-            "Confirm all cash registers are closed",
-            "Generate daily finance report",
-            "Archive audit trail and open next business day",
-          ].map((item) => (
-            <label key={item}>
-              <input defaultChecked type="checkbox" />
-              {item}
-            </label>
+        <PanelHeader title="Guest Ledger" subtitle="Every in-house or owing guest's running account across accommodation, restaurant & bar, and activities." />
+        <table>
+          <thead>
+            <tr>
+              <th>Guest</th>
+              <th>Room</th>
+              <th>Accommodation</th>
+              <th>Restaurant &amp; Bar</th>
+              <th>Activities</th>
+              <th>Total Charges</th>
+              <th>Outstanding</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ledgerReservations.length === 0 && (
+              <tr>
+                <td colSpan={8} className="muted">
+                  No in-house or owing guests right now.
+                </td>
+              </tr>
+            )}
+            {ledgerReservations.map((reservation) => {
+              const folio = buildGuestFolio(state, reservation);
+              const restaurantTotal = folio.lines.filter((line) => line.department === "Restaurant & Bar").reduce((sum, line) => sum + line.amount, 0);
+              const activitiesTotal = folio.lines.filter((line) => line.department === "Activities").reduce((sum, line) => sum + line.amount, 0);
+              return (
+                <tr key={reservation.id}>
+                  <td>
+                    <strong>{reservation.guest}</strong>
+                    <span className="block muted">{reservation.id}</span>
+                  </td>
+                  <td>{reservation.room}</td>
+                  <td>{money.format(folio.accommodationTotal)}</td>
+                  <td>{money.format(restaurantTotal)}</td>
+                  <td>{money.format(activitiesTotal)}</td>
+                  <td>{money.format(folio.totalCharges)}</td>
+                  <td>{money.format(folio.totalOutstanding)}</td>
+                  <td>
+                    <Badge label={folio.totalOutstanding > 0 ? "Outstanding" : "Paid"} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+
+      <div className="content-grid">
+        <section className="panel">
+          <PanelHeader title="Cash Registers" subtitle="Float, expected cash, and variance by outlet - counted at end of shift." />
+          <table>
+            <thead>
+              <tr>
+                <th>Area</th>
+                <th>Opening Float</th>
+                <th>Expected</th>
+                <th>Actual</th>
+                <th>Variance</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {state.cashRegisters.map((register) => {
+                const expected = computeExpectedCash(state, register);
+                const variance = computeCashVariance(state, register);
+                return (
+                  <tr key={register.id}>
+                    <td>{register.area}</td>
+                    <td>{money.format(register.openingFloat)}</td>
+                    <td>{money.format(expected)}</td>
+                    <td>{register.actualCash !== undefined ? money.format(register.actualCash) : "Not counted"}</td>
+                    <td>{register.actualCash !== undefined ? money.format(variance) : "-"}</td>
+                    <td>
+                      <Badge label={register.status} />
+                    </td>
+                    <td>
+                      <button className="secondary-button small" onClick={() => onOpenCashRegister(register.id)} type="button">
+                        Count Now
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+
+        <section className="panel">
+          <PanelHeader title="Recent Transactions" subtitle="Receipts and expenses across every department, most recent first." />
+          <div className="stack">
+            {transactions.length === 0 && <p className="muted">No transactions recorded yet today.</p>}
+            {transactions.map((transaction) => (
+              <div className="task-card" key={transaction.key}>
+                <div>
+                  <strong>{transaction.key}</strong>
+                  <span>{transaction.description}</span>
+                  <small>{transaction.time}</small>
+                </div>
+                <strong className={transaction.positive ? "amount-positive" : "amount-negative"}>
+                  {transaction.positive ? "+" : "-"}
+                  {money.format(transaction.amount)}
+                </strong>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <section className="panel">
+        <PanelHeader
+          title="Expenses"
+          subtitle="Daily operating costs by category - fuel, transport, procurement, repairs, cleaning materials, utilities."
+          action={
+            <button className="secondary-button" onClick={onOpenExpenseDrawer} type="button">
+              <Plus size={16} />
+              Record Expense
+            </button>
+          }
+        />
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Category</th>
+              <th>Department</th>
+              <th>Amount</th>
+              <th>Supplier</th>
+              <th>Approved By</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.expenses.length === 0 && (
+              <tr>
+                <td colSpan={7} className="muted">
+                  No expenses recorded yet.
+                </td>
+              </tr>
+            )}
+            {state.expenses.map((expense) => (
+              <tr key={expense.id}>
+                <td>{expense.id}</td>
+                <td>{expense.category}</td>
+                <td>{expense.department}</td>
+                <td>{money.format(expense.amount)}</td>
+                <td>{expense.supplier ?? "-"}</td>
+                <td>{expense.approvedBy}</td>
+                <td>{expense.time}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="panel">
+        <PanelHeader title="Reports" subtitle="Printed/PDF reports for front desk, housekeeping, security, kitchen and accounts." />
+        <div className="stack">
+          {state.reports.map((report) => (
+            <div className="task-card" key={report.id}>
+              <div>
+                <strong>{report.report}</strong>
+                <span>{report.schedule}</span>
+              </div>
+              <Badge label={report.status} />
+              <button className="secondary-button" onClick={() => onMarkReportPrinted(report.id)} type="button">
+                Generate
+              </button>
+            </div>
           ))}
         </div>
       </section>
@@ -4887,54 +5691,8 @@ function Finance({
         <AuditList audit={state.audit} />
       </section>
 
-      <div className="content-grid">
-        <section className="panel">
-          <PanelHeader title="Float, Cash Drop & Register Balancing" subtitle="Shortfalls and surpluses are reported to directors at end of day." />
-          <table>
-            <thead>
-              <tr>
-                <th>Area</th>
-                <th>Expected</th>
-                <th>Counted</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {state.cashControls.map((control) => (
-                <tr key={control.id}>
-                  <td>{control.area}</td>
-                  <td>{money.format(control.expected)}</td>
-                  <td>{control.counted ? money.format(control.counted) : "Not counted"}</td>
-                  <td>
-                    <Badge label={control.status} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-
-        <section className="panel">
-          <PanelHeader title="Downtime & Department Reports" subtitle="Printed/PDF reports for front desk, housekeeping, security, kitchen and accounts." />
-          <div className="stack">
-            {state.reports.map((report) => (
-              <div className="task-card" key={report.id}>
-                <div>
-                  <strong>{report.report}</strong>
-                  <span>{report.schedule}</span>
-                </div>
-                <Badge label={report.status} />
-                <button className="secondary-button" onClick={() => onMarkReportPrinted(report.id)} type="button">
-                  Generate
-                </button>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-
       <section className="panel">
-        <PanelHeader title="Night Audit Controls Still To Implement" subtitle="Manual-required checks that need real backend/accounting support later." />
+        <PanelHeader title="Not Yet Implemented" subtitle="Manual-required checks that need real backend/hardware support later." />
         <div className="control-grid">
           <ControlCard title="Bill-To-Company Attachments" detail="Company letters and restaurant checks must be attached before reconciliation." status="Missing" />
           <ControlCard title="Credit Card Tips & Paid-Outs" detail="Tips must be separated and paid out with corresponding entries." status="Missing" />
@@ -4943,6 +5701,379 @@ function Finance({
         </div>
       </section>
     </Page>
+  );
+}
+
+function RevenueBarList({ rows }: { rows: Array<{ label: string; value: number }> }) {
+  const max = Math.max(1, ...rows.map((row) => row.value));
+  return (
+    <div className="revenue-bars">
+      {rows.map((row) => (
+        <div className="revenue-bar-row" key={row.label}>
+          <span>{row.label}</span>
+          <div className="revenue-bar-track">
+            <div className="revenue-bar-fill" style={{ width: `${Math.round((row.value / max) * 100)}%` }} />
+          </div>
+          <strong>{money.format(row.value)}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ExpenseDrawer({
+  onClose,
+  onSave,
+}: {
+  onClose: () => void;
+  onSave: (values: {
+    category: ExpenseCategory;
+    department: string;
+    amount: number;
+    supplier: string;
+    approvedBy: string;
+    reference: string;
+    recordedBy: string;
+  }) => void;
+}) {
+  const [category, setCategory] = useState<ExpenseCategory>("Fuel");
+  const [department, setDepartment] = useState("");
+  const [amount, setAmount] = useState(0);
+  const [supplier, setSupplier] = useState("");
+  const [approvedBy, setApprovedBy] = useState("");
+  const [reference, setReference] = useState("");
+  const [recordedBy, setRecordedBy] = useState("Finance");
+
+  return (
+    <Drawer title="Record Expense" description="Daily operating costs post against today's business date and reduce net revenue." onClose={onClose}>
+      <div className="form-grid">
+        <Field label="Category">
+          <select value={category} onChange={(event) => setCategory(event.target.value as ExpenseCategory)}>
+            {EXPENSE_CATEGORIES.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Department">
+          <input value={department} onChange={(event) => setDepartment(event.target.value)} placeholder="e.g. Transport, Housekeeping" />
+        </Field>
+        <Field label="Amount (USD)">
+          <input min={0} onChange={(event) => setAmount(Number(event.target.value))} type="number" value={amount} />
+        </Field>
+        <Field label="Supplier (optional)">
+          <input value={supplier} onChange={(event) => setSupplier(event.target.value)} placeholder="e.g. Puma Zimbabwe" />
+        </Field>
+        <Field label="Approved By">
+          <input value={approvedBy} onChange={(event) => setApprovedBy(event.target.value)} placeholder="Manager name" />
+        </Field>
+        <Field label="Reference (optional)">
+          <input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="GRN / invoice number" />
+        </Field>
+        <Field label="Recorded By">
+          <input value={recordedBy} onChange={(event) => setRecordedBy(event.target.value)} />
+        </Field>
+      </div>
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button
+          className="primary-button"
+          disabled={amount <= 0 || !department || !approvedBy || !recordedBy}
+          onClick={() => onSave({ category, department, amount, supplier, approvedBy, reference, recordedBy })}
+          type="button"
+        >
+          Record Expense
+        </button>
+      </div>
+    </Drawer>
+  );
+}
+
+function CashRegisterModal({
+  register,
+  expected,
+  onClose,
+  onSave,
+}: {
+  register: CashRegister | null;
+  expected: number;
+  onClose: () => void;
+  onSave: (id: string, actualCash: number, approvedBy: string) => void;
+}) {
+  const [actualCash, setActualCash] = useState(register?.actualCash ?? expected);
+  const [approvedBy, setApprovedBy] = useState(register?.approvedBy ?? "");
+
+  if (!register) return null;
+
+  const variance = Number((actualCash - expected).toFixed(2));
+  const needsApproval = variance !== 0;
+
+  return (
+    <Modal title={`Count Register - ${register.area}`} description={`Business date ${businessDateLabel}`} onClose={onClose}>
+      <div className="folio-line">
+        <span>Opening Float</span>
+        <strong>{money.format(register.openingFloat)}</strong>
+      </div>
+      <div className="folio-line">
+        <span>Expected Cash</span>
+        <strong>{money.format(expected)}</strong>
+      </div>
+      <Field label="Actual Cash Counted">
+        <input min={0} onChange={(event) => setActualCash(Number(event.target.value))} type="number" value={actualCash} />
+      </Field>
+      <div className={variance === 0 ? "finding-banner ok" : "finding-banner blocked"}>
+        {variance === 0
+          ? "Register balances exactly."
+          : `Variance of ${money.format(variance)} - a manager must approve before Night Audit can close the day.`}
+      </div>
+      {needsApproval && (
+        <Field label="Variance Approved By (Manager)">
+          <input value={approvedBy} onChange={(event) => setApprovedBy(event.target.value)} placeholder="Manager name" />
+        </Field>
+      )}
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button className="primary-button" onClick={() => onSave(register.id, actualCash, approvedBy)} type="button">
+          Save Count
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function ReceivePaymentModal({
+  reservations,
+  onClose,
+  onSave,
+}: {
+  reservations: Reservation[];
+  onClose: () => void;
+  onSave: (id: string, details: { amount: number; method: PaymentMethod; purpose: ReceiptPurpose }) => void;
+}) {
+  const [reservationId, setReservationId] = useState(reservations[0]?.id ?? "");
+  const reservation = reservations.find((item) => item.id === reservationId) ?? null;
+  const [amount, setAmount] = useState(reservation?.balance ?? 0);
+  const [method, setMethod] = useState<PaymentMethod>("Cash");
+
+  const selectReservation = (id: string) => {
+    setReservationId(id);
+    setAmount(reservations.find((item) => item.id === id)?.balance ?? 0);
+  };
+
+  return (
+    <Modal title="Receive Payment" description="Post a payment against a guest's accommodation balance and issue a receipt." onClose={onClose}>
+      {reservations.length === 0 ? (
+        <p className="muted">No guest currently has an outstanding accommodation balance.</p>
+      ) : (
+        <>
+          <Field label="Guest">
+            <select value={reservationId} onChange={(event) => selectReservation(event.target.value)}>
+              {reservations.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.guest} - {item.id} (owes {money.format(item.balance)})
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label={`Amount (Balance: ${money.format(reservation?.balance ?? 0)})`}>
+            <input min={0} max={reservation?.balance ?? 0} onChange={(event) => setAmount(Number(event.target.value))} type="number" value={amount} />
+          </Field>
+          <Field label="Payment Method">
+            <select value={method} onChange={(event) => setMethod(event.target.value as PaymentMethod)}>
+              <option>Cash</option>
+              <option>Ecocash</option>
+              <option>Bank Transfer</option>
+              <option>Card</option>
+            </select>
+          </Field>
+        </>
+      )}
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button
+          className="primary-button"
+          disabled={!reservation || amount <= 0}
+          onClick={() =>
+            reservation &&
+            onSave(reservation.id, { amount, method, purpose: amount >= reservation.balance ? "Full Settlement" : "Balance Payment" })
+          }
+          type="button"
+        >
+          Record Payment &amp; Issue Receipt
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function NightAuditWizard({
+  state,
+  activeRun,
+  onClose,
+  onStart,
+  onToggleStep,
+  onGenerateReports,
+  onCloseBusinessDay,
+}: {
+  state: DemoState;
+  activeRun: NightAuditRun | null;
+  onClose: () => void;
+  onStart: (startedBy: string) => void;
+  onToggleStep: (runId: string, step: NightAuditStepId) => void;
+  onGenerateReports: () => void;
+  onCloseBusinessDay: (closedBy: string) => void;
+}) {
+  const [startedBy, setStartedBy] = useState("Reception");
+  const [closedBy, setClosedBy] = useState("General Manager");
+
+  if (state.businessDay.status === "Closed") {
+    return (
+      <Modal title="Business Day Closed" description={`Business date ${businessDateLabel}`} onClose={onClose}>
+        <p>
+          Business date {businessDateLabel} was closed by {state.businessDay.closedBy} at {state.businessDay.closedAt}. All reports are archived in the Reports panel.
+        </p>
+        <div className="sheet-footer">
+          <button className="primary-button" onClick={onClose} type="button">
+            Close
+          </button>
+        </div>
+      </Modal>
+    );
+  }
+
+  const arrivalsToday = state.reservations.filter((reservation) => reservation.arrival === businessDateLabel && reservation.status !== "Cancelled");
+  const arrivalsPending = arrivalsToday.filter((reservation) => reservation.status !== "Checked In");
+  const departuresToday = state.reservations.filter((reservation) => reservation.departure === businessDateLabel && reservation.status !== "Cancelled");
+  const departuresPending = departuresToday.filter((reservation) => reservation.status !== "Checked Out");
+  const openTickets = state.orders.filter((order) => order.kitchenStatus !== "Completed");
+  const totals = computeFinanceTotals(state);
+  const uncountedRegisters = state.cashRegisters.filter((register) => register.actualCash === undefined);
+  const unresolvedVariances = state.cashRegisters.filter(
+    (register) => register.actualCash !== undefined && computeCashVariance(state, register) !== 0 && register.status !== "Variance Approved",
+  );
+
+  if (!activeRun) {
+    return (
+      <Modal title="Start Night Audit" description={`Business date ${businessDateLabel}`} onClose={onClose}>
+        <p>
+          Night Audit verifies every department has correctly completed the business day before Finance can close it. Once started, all six checks below must be
+          verified before Business Day can close.
+        </p>
+        {openTickets.length > 0 && (
+          <div className="finding-banner blocked">
+            {openTickets.length} open restaurant ticket{openTickets.length > 1 ? "s" : ""} on the kitchen display - Night Audit can start, but Restaurant must clear
+            before you can close.
+          </div>
+        )}
+        <Field label="Started By">
+          <input value={startedBy} onChange={(event) => setStartedBy(event.target.value)} placeholder="Reception / Night Auditor" />
+        </Field>
+        <div className="sheet-footer">
+          <button className="ghost-button" onClick={onClose} type="button">
+            Cancel
+          </button>
+          <button className="primary-button" disabled={!startedBy} onClick={() => onStart(startedBy)} type="button">
+            Start Night Audit
+          </button>
+        </div>
+      </Modal>
+    );
+  }
+
+  const allVerified = NIGHT_AUDIT_STEPS.every((step) => activeRun.completedSteps.includes(step.id));
+  const canClose = allVerified && openTickets.length === 0 && departuresPending.length === 0 && uncountedRegisters.length === 0 && unresolvedVariances.length === 0;
+
+  return (
+    <Modal
+      title={`Night Audit - ${activeRun.id}`}
+      description={`Business date ${businessDateLabel}, started by ${activeRun.startedBy} at ${activeRun.startedAt}`}
+      onClose={onClose}
+      wide
+    >
+      <div className="wizard-steps">
+        {NIGHT_AUDIT_STEPS.map((step) => {
+          const done = activeRun.completedSteps.includes(step.id);
+          return (
+            <div className={`wizard-step ${done ? "done" : ""}`} key={step.id}>
+              <div className="wizard-step-head">
+                <strong>{step.title}</strong>
+                <button className={done ? "secondary-button small" : "primary-button small"} onClick={() => onToggleStep(activeRun.id, step.id)} type="button">
+                  {done ? "Verified" : "Verify"}
+                </button>
+              </div>
+              <p className="muted">{step.description}</p>
+              {step.id === "arrivals" && (
+                <p>
+                  {arrivalsPending.length === 0
+                    ? `All ${arrivalsToday.length} arrival${arrivalsToday.length === 1 ? "" : "s"} checked in.`
+                    : `${arrivalsPending.length} arrival(s) not yet checked in: ${arrivalsPending.map((reservation) => reservation.guest).join(", ")}`}
+                </p>
+              )}
+              {step.id === "checkouts" && (
+                <p>
+                  {departuresPending.length === 0
+                    ? `All ${departuresToday.length} departure${departuresToday.length === 1 ? "" : "s"} checked out.`
+                    : `${departuresPending.length} departure(s) still open: ${departuresPending.map((reservation) => reservation.guest).join(", ")}`}
+                </p>
+              )}
+              {step.id === "charges" && (
+                <p>
+                  Accommodation {money.format(totals.accommodationRevenue + totals.conferenceRevenue)}, Restaurant &amp; Bar{" "}
+                  {money.format(totals.restaurantRevenue)}, Activities {money.format(totals.activitiesRevenue)}. Outstanding across all guests:{" "}
+                  {money.format(totals.outstandingBalance)}.
+                </p>
+              )}
+              {step.id === "restaurant" && (
+                <p>
+                  {openTickets.length === 0
+                    ? "No open kitchen tickets."
+                    : `${openTickets.length} ticket(s) still open: ${openTickets.map((order) => order.id).join(", ")}`}
+                </p>
+              )}
+              {step.id === "cash" && (
+                <p>
+                  {uncountedRegisters.length === 0 && unresolvedVariances.length === 0
+                    ? "All registers counted and balanced."
+                    : `${uncountedRegisters.length} register(s) not yet counted, ${unresolvedVariances.length} unresolved variance(s).`}
+                </p>
+              )}
+              {step.id === "reports" && (
+                <div className="button-row">
+                  <button className="secondary-button small" onClick={onGenerateReports} type="button">
+                    Generate All Reports
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className={canClose ? "finding-banner ok" : "finding-banner blocked"}>
+        {canClose ? "Every check has passed. Business Day is ready to close." : "Resolve the items above before Business Day can close."}
+      </div>
+
+      <Field label="Closed By (Manager / Finance Officer)">
+        <input value={closedBy} onChange={(event) => setClosedBy(event.target.value)} />
+      </Field>
+
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Close Wizard
+        </button>
+        <button className="primary-button" disabled={!canClose || !closedBy} onClick={() => onCloseBusinessDay(closedBy)} type="button">
+          <Lock size={16} />
+          Close Business Day
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -5066,15 +6197,17 @@ function Modal({
   description,
   onClose,
   children,
+  wide,
 }: {
   title: string;
   description?: string;
   onClose: () => void;
   children: React.ReactNode;
+  wide?: boolean;
 }) {
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="modal-panel" onClick={(event) => event.stopPropagation()}>
+      <div className={`modal-panel ${wide ? "modal-panel-wide" : ""}`} onClick={(event) => event.stopPropagation()}>
         <div className="sheet-header">
           <div>
             <h2>{title}</h2>
@@ -5123,7 +6256,7 @@ function ReservationDrawer({
   reservation,
   prefill,
   rooms,
-  orders,
+  state,
   onClose,
   onSave,
   onCancelReservation,
@@ -5135,7 +6268,7 @@ function ReservationDrawer({
   reservation: Reservation | null;
   prefill?: { guest?: string; arrival?: string } | null;
   rooms: Room[];
-  orders: PosOrder[];
+  state: DemoState;
   onClose: () => void;
   onSave: (values: ReservationFormValues, existingId: string | null) => void;
   onCancelReservation: (id: string) => void;
@@ -5164,7 +6297,7 @@ function ReservationDrawer({
 
   const nights = Math.max(1, dates.indexOf(departure) - dates.indexOf(arrival));
   const estimatedTotal = nights * rate;
-  const roomOrders = reservation ? orders.filter((order) => order.guest === reservation.guest) : [];
+  const folio = reservation ? buildGuestFolio(state, reservation) : null;
 
   const canCheckIn = reservation && !["Checked In", "Checked Out", "Cancelled"].includes(reservation.status);
   const canCheckOut = reservation?.status === "Checked In";
@@ -5326,19 +6459,28 @@ function ReservationDrawer({
         />
       </div>
 
-      {reservation && roomOrders.length > 0 && (
+      {reservation && folio && (
         <div className="form-section">
-          <h3>Room Charges on File</h3>
+          <h3>Guest Folio</h3>
           <div className="stack">
-            {roomOrders.map((order) => (
-              <div className="task-card" key={order.id}>
+            {folio.lines.map((line) => (
+              <div className="task-card" key={line.reference}>
                 <div>
-                  <strong>{order.id}</strong>
-                  <span>{order.items.map((item) => `${item.quantity}x ${item.name}`).join(", ")}</span>
+                  <strong>
+                    {line.reference} - {line.department}
+                  </strong>
+                  <span>{line.description}</span>
                 </div>
-                <strong>{money.format(order.total)}</strong>
+                <div>
+                  <strong>{money.format(line.amount)}</strong>
+                  <Badge label={line.settled ? "Paid" : "Outstanding"} />
+                </div>
               </div>
             ))}
+          </div>
+          <div className="folio-line total">
+            <span>Total Outstanding</span>
+            <strong>{money.format(folio.totalOutstanding)}</strong>
           </div>
         </div>
       )}
@@ -5469,21 +6611,19 @@ function CheckInModal({
 
 function CheckOutDrawer({
   reservation,
-  orders,
+  state,
   onClose,
   onConfirm,
 }: {
   reservation: Reservation;
-  orders: PosOrder[];
+  state: DemoState;
   onClose: () => void;
   onConfirm: (id: string, details: { total: number; paymentMethod: PaymentMethod }) => void;
 }) {
-  const roomOrders = orders.filter((order) => order.guest === reservation.guest && order.payment === "Room Charge");
-  const accommodationBalance = reservation.balance;
-  const restaurantCharge = roomOrders.reduce((sum, order) => sum + order.total, 0);
+  const folio = buildGuestFolio(state, reservation);
   const [otherCharges, setOtherCharges] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("Cash");
-  const total = accommodationBalance + restaurantCharge + otherCharges;
+  const total = folio.totalOutstanding + otherCharges;
 
   return (
     <Drawer title={`Check Out - ${reservation.guest}`} description={`${reservation.id} - Room ${reservation.room}`} onClose={onClose}>
@@ -5491,14 +6631,18 @@ function CheckOutDrawer({
         <h3>Folio Summary</h3>
         <div className="folio-line">
           <span>Accommodation Balance Due</span>
-          <strong>{money.format(accommodationBalance)}</strong>
+          <strong>{money.format(folio.accommodationOutstanding)}</strong>
         </div>
         <div className="folio-line">
           <span>Restaurant &amp; Bar (room charges)</span>
-          <strong>{money.format(restaurantCharge)}</strong>
+          <strong>{money.format(folio.restaurantOutstanding)}</strong>
         </div>
         <div className="folio-line">
-          <span>Other Charges (laundry, activities, etc.)</span>
+          <span>Activities (room charges)</span>
+          <strong>{money.format(folio.activitiesOutstanding)}</strong>
+        </div>
+        <div className="folio-line">
+          <span>Other Charges (laundry, incidentals, etc.)</span>
           <input type="number" min={0} value={otherCharges} onChange={(event) => setOtherCharges(Number(event.target.value))} />
         </div>
         <div className="folio-line total">
@@ -6127,6 +7271,7 @@ function ActivityBookingDrawer({
   const [time, setTime] = useState("09:00");
   const [instructor, setInstructor] = useState("");
   const [price, setPrice] = useState(ACTIVITY_PRICE.Zipline);
+  const [payment, setPayment] = useState<ActivityBooking["payment"]>("Room Charge");
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [guardianPresent, setGuardianPresent] = useState(false);
   const [weightKg, setWeightKg] = useState("");
@@ -6181,6 +7326,13 @@ function ActivityBookingDrawer({
         <Field label="Price (USD)">
           <input min={0} onChange={(event) => setPrice(Number(event.target.value))} type="number" value={price} />
         </Field>
+        <Field label="Payment">
+          <select value={payment} onChange={(event) => setPayment(event.target.value as ActivityBooking["payment"])}>
+            <option value="Room Charge">Charge to Room</option>
+            <option value="Cash">Cash</option>
+            <option value="Card">Card</option>
+          </select>
+        </Field>
         <Field label="Weight (kg, optional)">
           <input onChange={(event) => setWeightKg(event.target.value)} placeholder="For zipline/quad weight limits" type="number" value={weightKg} />
         </Field>
@@ -6227,6 +7379,7 @@ function ActivityBookingDrawer({
               time,
               instructor,
               price,
+              payment,
               ageConfirmed,
               guardianPresent,
               weightKg,

@@ -397,7 +397,8 @@ textarea:focus-visible,
   transform: translateY(1px);
 }
 
-.primary-button.small {
+.primary-button.small,
+.secondary-button.small {
   min-height: 34px;
   padding: 0 12px;
 }
@@ -685,7 +686,8 @@ tr:hover td {
 .badge.passed,
 .badge.returned,
 .badge.delivered,
-.badge.full-settlement {
+.badge.full-settlement,
+.badge.variance-approved {
   background: #dcfce7;
   color: #166534;
 }
@@ -705,7 +707,8 @@ tr:hover td {
 .badge.required,
 .badge.report-required,
 .badge.deposit,
-.badge.balance-payment {
+.badge.balance-payment,
+.badge.counted {
   background: #ffedd5;
   color: #9a3412;
 }
@@ -742,7 +745,9 @@ tr:hover td {
 .badge.spare-key-released,
 .badge.demo-script,
 .badge.backend-needed,
-.badge.tauri-needed {
+.badge.tauri-needed,
+.badge.trading,
+.badge.on-room-account {
   background: #dbeafe;
   color: #1d4ed8;
 }
@@ -1365,6 +1370,81 @@ textarea {
   padding-top: 12px;
 }
 
+.finance-quick-actions {
+  margin: -4px 0 4px;
+}
+
+.revenue-bars {
+  display: grid;
+  gap: 14px;
+}
+
+.revenue-bar-row {
+  align-items: center;
+  display: grid;
+  gap: 4px 12px;
+  grid-template-columns: 120px 1fr auto;
+}
+
+.revenue-bar-row span {
+  color: #536071;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.revenue-bar-track {
+  background: #edf1f5;
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.revenue-bar-fill {
+  background: #0f4c81;
+  border-radius: 999px;
+  height: 100%;
+}
+
+.amount-positive {
+  color: #166534;
+}
+
+.amount-negative {
+  color: #991b1b;
+}
+
+.wizard-steps {
+  display: grid;
+  gap: 12px;
+}
+
+.wizard-step {
+  background: #f8fafc;
+  border: 1px solid #e5ebf2;
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.wizard-step.done {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.wizard-step-head {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.wizard-step p {
+  margin: 6px 0 0;
+}
+
+.modal-panel-wide {
+  max-width: 760px;
+}
+
 .receipt-print {
   display: grid;
   gap: 4px;
@@ -1525,6 +1605,16 @@ textarea {
   .ghost-button,
   .icon-button {
     min-height: 42px;
+  }
+
+  .revenue-bar-row {
+    grid-template-columns: 92px 1fr auto;
+  }
+
+  .wizard-step-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
   }
 }
 
