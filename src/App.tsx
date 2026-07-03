@@ -15,6 +15,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Minus,
   Package,
   Plus,
   Printer,
@@ -25,6 +26,7 @@ import {
   ShieldCheck,
   ShoppingCart,
   Sparkles,
+  Trash2,
   Utensils,
   Warehouse,
   X,
@@ -168,15 +170,74 @@ type HousekeepingTask = {
   priority: "Normal" | "High";
 };
 
+type MenuCategory = "Food" | "Beverage" | "Alcohol";
+
+type MenuCatalogItem = {
+  name: string;
+  price: number;
+  category: MenuCategory;
+};
+
+type OrderLineItem = {
+  name: string;
+  price: number;
+  quantity: number;
+};
+
 type PosOrder = {
   id: string;
   table: string;
   waiter: string;
   guest: string;
-  items: string[];
+  items: OrderLineItem[];
   total: number;
   payment: "Cash" | "Card" | "Room Charge";
   kitchenStatus: KitchenStatus;
+  containsAlcohol: boolean;
+  ageVerified: boolean;
+  placedAt: string;
+  settledAt?: string;
+};
+
+type PosOrderFormValues = {
+  table: string;
+  guest: string;
+  waiter: string;
+  payment: PosOrder["payment"];
+  items: OrderLineItem[];
+  ageVerified: boolean;
+};
+
+type TaskCheckStatus = "Done" | "Pending";
+
+type KitchenChecklistItem = {
+  section: string;
+  label: string;
+  status: TaskCheckStatus;
+};
+
+type KitchenClosingChecklist = {
+  id: string;
+  date: string;
+  submittedBy: string;
+  submittedAt: string;
+  fridgeTempC: number;
+  items: KitchenChecklistItem[];
+  notes?: string;
+};
+
+type KitchenChecklistFormValues = {
+  date: string;
+  submittedBy: string;
+  fridgeTempC: number;
+  items: KitchenChecklistItem[];
+  notes: string;
+};
+
+type KitchenChecklistAlert = {
+  section: string;
+  item: string;
+  checklistDate: string;
 };
 
 type PurchaseRequest = {
@@ -394,6 +455,7 @@ type DemoState = {
   complaints: Complaint[];
   safetyIncidents: SafetyIncidentReport[];
   activityChecklists: ActivityDailyChecklist[];
+  kitchenChecklists: KitchenClosingChecklist[];
   cashControls: CashControl[];
   reports: ReportRun[];
   receipts: Receipt[];
@@ -401,7 +463,7 @@ type DemoState = {
   housekeepingChecklists: HousekeepingChecklist[];
 };
 
-const storageKey = "blue-hills-erp-demo-v3";
+const storageKey = "blue-hills-erp-demo-v4";
 
 const LODGE_ORDER: Lodge[] = ["Zebra", "Kudu", "Impala", "Dormitory"];
 
@@ -484,6 +546,60 @@ function createDefaultActivityChecklistItems(activity: ActivityType): ActivityCh
   return ACTIVITY_CHECKLIST_TEMPLATE[activity].map((label) => ({ label, status: "Pass" as ChecklistItemStatus }));
 }
 
+const MENU_CATALOG: MenuCatalogItem[] = [
+  { name: "Chicken Burger", price: 12, category: "Food" },
+  { name: "Greek Salad", price: 8, category: "Food" },
+  { name: "Beef Skewers", price: 10, category: "Food" },
+  { name: "Breakfast Plate", price: 9, category: "Food" },
+  { name: "Mazoe Orange", price: 3, category: "Beverage" },
+  { name: "Castle Lite", price: 4, category: "Alcohol" },
+];
+
+const MENU_BY_NAME: Record<string, MenuCatalogItem> = Object.fromEntries(MENU_CATALOG.map((item) => [item.name, item]));
+
+// Condensed from the manual's Section F kitchen-closing SOP (21 items) and the separate
+// dining room opening/closing checklist (28 items), grouped into representative line items.
+const KITCHEN_CHECKLIST_TEMPLATE: Record<string, string[]> = {
+  "Kitchen Area & Food Storage": [
+    "Fridges, storage areas and floors cleaned",
+    "Kitchen sinks emptied and wash-up area closed",
+    "Rubbish removed and disposed of",
+    "Utensils and chopping boards cleaned and sterilized",
+    "Food items covered, labelled and stored correctly",
+  ],
+  "Equipment Shutdown & Security": [
+    "Gas equipment switched off",
+    "Hot plates, salamanders and fryers off and covered",
+    "Power points and extraction fan disconnected",
+    "Any deviations identified and rectified",
+    "Doors, windows and alarms secured; keys deposited",
+  ],
+  "Dining Room Opening": [
+    "Floors swept, chairs and tables set",
+    "Stations stocked with glassware and silverware",
+    "Water pitchers filled",
+    "Reservations list checked for special requests",
+    "Daily specials confirmed with kitchen",
+  ],
+  "Dining Room Closing": [
+    "Tables, counters and menus sanitized",
+    "Condiments and napkins restocked",
+    "Glassware and silverware dried and stored",
+    "Dessert cases and fridges cleaned; no food left out",
+    "Handover notes left for next shift",
+  ],
+};
+
+const KITCHEN_CHECKLIST_SECTIONS = Object.keys(KITCHEN_CHECKLIST_TEMPLATE);
+
+const FRIDGE_SAFE_MAX_C = 5;
+
+function createDefaultKitchenChecklistItems(): KitchenChecklistItem[] {
+  return KITCHEN_CHECKLIST_SECTIONS.flatMap((section) =>
+    KITCHEN_CHECKLIST_TEMPLATE[section].map((label) => ({ section, label, status: "Done" as TaskCheckStatus })),
+  );
+}
+
 const money = new Intl.NumberFormat("en-ZW", {
   style: "currency",
   currency: "USD",
@@ -536,6 +652,12 @@ type DashboardMetrics = {
   openSafetyIncidents: number;
   activityEquipmentAlerts: ActivityEquipmentAlert[];
   arrivalsAwaitingActivity: Reservation[];
+  restaurantRevenueToday: number;
+  openKitchenTickets: number;
+  openComplaints: number;
+  kitchenChecklistSubmittedToday: boolean;
+  latestKitchenChecklist?: KitchenClosingChecklist;
+  kitchenChecklistAlerts: KitchenChecklistAlert[];
 };
 
 function todayIsoDate() {
@@ -742,6 +864,28 @@ function computeActivityEquipmentAlerts(checklists: ActivityDailyChecklist[]): A
   return alerts;
 }
 
+function getLatestKitchenChecklist(checklists: KitchenClosingChecklist[]) {
+  return [...checklists].sort((a, b) => b.date.localeCompare(a.date))[0];
+}
+
+function computeKitchenChecklistAlerts(checklist: KitchenClosingChecklist | undefined): KitchenChecklistAlert[] {
+  if (!checklist) return [];
+
+  const alerts: KitchenChecklistAlert[] = checklist.items
+    .filter((item) => item.status === "Pending")
+    .map((item) => ({ section: item.section, item: item.label, checklistDate: checklist.date }));
+
+  if (checklist.fridgeTempC > FRIDGE_SAFE_MAX_C) {
+    alerts.push({
+      section: "Kitchen Area & Food Storage",
+      item: `Fridge reading ${checklist.fridgeTempC}°C - above the ${FRIDGE_SAFE_MAX_C}°C safe limit`,
+      checklistDate: checklist.date,
+    });
+  }
+
+  return alerts;
+}
+
 function summarizeRoomStatuses(rooms: Room[]): RoomStatusSummary {
   const byLodge = LODGE_ORDER.reduce(
     (accumulator, lodge) => ({
@@ -810,6 +954,12 @@ function buildDashboardMetrics(state: DemoState): DashboardMetrics {
     openSafetyIncidents: state.safetyIncidents.filter((report) => report.status !== "Resolved").length,
     activityEquipmentAlerts: computeActivityEquipmentAlerts(state.activityChecklists),
     arrivalsAwaitingActivity: arrivalsToday.filter((reservation) => !bookedGuestNames.has(reservation.guest.toLowerCase())),
+    restaurantRevenueToday: state.orders.reduce((sum, order) => sum + order.total, 0),
+    openKitchenTickets: state.orders.filter((order) => order.kitchenStatus !== "Completed").length,
+    openComplaints: state.complaints.filter((complaint) => complaint.status !== "Resolved").length,
+    kitchenChecklistSubmittedToday: state.kitchenChecklists.some((checklist) => checklist.date === businessDateIso),
+    latestKitchenChecklist: getLatestKitchenChecklist(state.kitchenChecklists),
+    kitchenChecklistAlerts: computeKitchenChecklistAlerts(getLatestKitchenChecklist(state.kitchenChecklists)),
   };
 }
 
@@ -925,20 +1075,33 @@ function createSeedState(): DemoState {
         table: "Table 4",
         waiter: "Lynette",
         guest: "Tariro Moyo",
-        items: ["2 Chicken Burgers", "1 Greek Salad", "3 Mazoe Orange"],
-        total: 48,
+        items: [
+          { name: "Chicken Burger", price: 12, quantity: 2 },
+          { name: "Greek Salad", price: 8, quantity: 1 },
+          { name: "Mazoe Orange", price: 3, quantity: 3 },
+        ],
+        total: 41,
         payment: "Room Charge",
         kitchenStatus: "Preparing",
+        containsAlcohol: false,
+        ageVerified: true,
+        placedAt: "08:52",
       },
       {
         id: "KOT-222",
         table: "Bar Counter",
         waiter: "Farai",
         guest: "Walk-in",
-        items: ["2 Beef Skewers", "2 Castle Lite"],
-        total: 31,
+        items: [
+          { name: "Beef Skewers", price: 10, quantity: 2 },
+          { name: "Castle Lite", price: 4, quantity: 2 },
+        ],
+        total: 28,
         payment: "Cash",
         kitchenStatus: "New",
+        containsAlcohol: true,
+        ageVerified: true,
+        placedAt: "09:05",
       },
     ],
     purchaseRequests: [
@@ -1054,9 +1217,20 @@ function createSeedState(): DemoState {
     manualTasks: [
       { id: "MT-1", area: "Zebra 3", item: "Registration card printed and signed", owner: "Reception", status: "Pending" },
       { id: "MT-2", area: "Conference Hall", item: "Projector, flip chart, diesel, water and folders checked", owner: "Front Office", status: "Needs Attention" },
-      { id: "MT-3", area: "Restaurant", item: "Opening checklist: menus, cutlery, glassware, tables", owner: "Head Waiter", status: "Done" },
-      { id: "MT-4", area: "Kitchen", item: "Fridge temperatures, gas, bins and pest control log", owner: "Chef", status: "Pending" },
       { id: "MT-5", area: "Kudu 2", item: "Towels, soap, shower drainage, lights and verandah checked", owner: "Housekeeping", status: "Needs Attention" },
+    ],
+    kitchenChecklists: [
+      {
+        id: "KC-1",
+        date: "2026-07-01",
+        submittedBy: "Chef",
+        submittedAt: "22:10",
+        fridgeTempC: 6,
+        items: createDefaultKitchenChecklistItems().map((item) =>
+          item.label === "Power points and extraction fan disconnected" ? { ...item, status: "Pending" } : item,
+        ),
+        notes: "Extraction fan breaker tripped - logged for maintenance follow-up.",
+      },
     ],
     messages: [
       {
@@ -1252,6 +1426,8 @@ function App() {
   const [activityBookingDrawerOpen, setActivityBookingDrawerOpen] = useState(false);
   const [activityChecklistDrawerOpen, setActivityChecklistDrawerOpen] = useState(false);
   const [safetyIncidentModalOpen, setSafetyIncidentModalOpen] = useState(false);
+  const [orderDrawer, setOrderDrawer] = useState<{ initialItem?: string } | null>(null);
+  const [kitchenChecklistDrawerOpen, setKitchenChecklistDrawerOpen] = useState(false);
 
   const openNewReservation = () => {
     setReservationPrefill(null);
@@ -1522,6 +1698,55 @@ function App() {
     );
   };
 
+  const createOrder = (values: PosOrderFormValues) => {
+    const id = `KOT-${220 + state.orders.length + Math.floor(Math.random() * 90)}`;
+    const total = values.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const containsAlcohol = values.items.some((item) => MENU_BY_NAME[item.name]?.category === "Alcohol");
+    const newOrder: PosOrder = {
+      id,
+      table: values.table,
+      waiter: values.waiter,
+      guest: values.guest,
+      items: values.items,
+      total,
+      payment: values.payment,
+      kitchenStatus: "New",
+      containsAlcohol,
+      ageVerified: containsAlcohol ? values.ageVerified : true,
+      placedAt: nowTime(),
+    };
+
+    withAudit(
+      { ...state, orders: [newOrder, ...state.orders] },
+      `${id} placed for ${values.guest} (${values.table}): ${values.items.map((item) => `${item.quantity}x ${item.name}`).join(", ")}`,
+      values.waiter,
+    );
+    setOrderDrawer(null);
+  };
+
+  const saveKitchenChecklist = (values: KitchenChecklistFormValues) => {
+    const id = `KC-${Date.now().toString().slice(-6)}`;
+    const checklist: KitchenClosingChecklist = {
+      id,
+      date: values.date,
+      submittedBy: values.submittedBy,
+      submittedAt: nowTime(),
+      fridgeTempC: values.fridgeTempC,
+      items: values.items,
+      notes: values.notes || undefined,
+    };
+
+    const pendingCount = values.items.filter((item) => item.status === "Pending").length;
+    const tempWarning = values.fridgeTempC > FRIDGE_SAFE_MAX_C ? `, fridge reading ${values.fridgeTempC}°C is above the safe limit` : "";
+
+    withAudit(
+      { ...state, kitchenChecklists: [checklist, ...state.kitchenChecklists] },
+      `Kitchen closing checklist submitted by ${values.submittedBy}${pendingCount > 0 ? ` - ${pendingCount} item${pendingCount > 1 ? "s" : ""} still pending` : ""}${tempWarning}`,
+      values.submittedBy,
+    );
+    setKitchenChecklistDrawerOpen(false);
+  };
+
   const advanceKitchen = (id: string) => {
     const order = state.orders.find((item) => item.id === id);
     if (!order) return;
@@ -1532,13 +1757,16 @@ function App() {
       Ready: "Completed",
       Completed: "Completed",
     };
+    const next = nextStatus[order.kitchenStatus];
 
     withAudit(
       {
         ...state,
-        orders: state.orders.map((item) => (item.id === id ? { ...item, kitchenStatus: nextStatus[item.kitchenStatus] } : item)),
+        orders: state.orders.map((item) =>
+          item.id === id ? { ...item, kitchenStatus: next, settledAt: next === "Completed" ? nowTime() : item.settledAt } : item,
+        ),
       },
-      `${id} moved to ${nextStatus[order.kitchenStatus]}`,
+      `${id} moved to ${next}`,
       "Kitchen",
     );
   };
@@ -1885,7 +2113,13 @@ function App() {
           />
         )}
         {activeModule === "restaurant" && (
-          <RestaurantKitchen state={state} onAdvanceKitchen={advanceKitchen} onCompleteManualTask={completeManualTask} onAdvanceComplaint={advanceComplaint} />
+          <RestaurantKitchen
+            state={state}
+            onAdvanceKitchen={advanceKitchen}
+            onAdvanceComplaint={advanceComplaint}
+            onOpenOrderDrawer={(initialItem) => setOrderDrawer({ initialItem })}
+            onOpenKitchenChecklistDrawer={() => setKitchenChecklistDrawerOpen(true)}
+          />
         )}
         {activeModule === "operations" && (
           <Operations
@@ -1969,6 +2203,14 @@ function App() {
 
       {safetyIncidentModalOpen && (
         <SafetyIncidentModal onClose={() => setSafetyIncidentModalOpen(false)} onSave={saveSafetyIncident} />
+      )}
+
+      {orderDrawer && (
+        <OrderDrawer initialItem={orderDrawer.initialItem} onClose={() => setOrderDrawer(null)} onSave={createOrder} />
+      )}
+
+      {kitchenChecklistDrawerOpen && (
+        <KitchenChecklistDrawer onClose={() => setKitchenChecklistDrawerOpen(false)} onSave={saveKitchenChecklist} />
       )}
     </div>
   );
@@ -2119,6 +2361,38 @@ function Dashboard({
     });
   }
 
+  if (metrics.openComplaints > 0) {
+    attentionItems.push({
+      key: "open-complaints",
+      icon: ClipboardCheck,
+      title: `${metrics.openComplaints} guest complaint${metrics.openComplaints > 1 ? "s" : ""} open`,
+      description: state.complaints
+        .filter((complaint) => complaint.status !== "Resolved")
+        .map((complaint) => `${complaint.id} (${complaint.department})`)
+        .join(", "),
+    });
+  }
+
+  if (!metrics.kitchenChecklistSubmittedToday) {
+    attentionItems.push({
+      key: "kitchen-checklist-missing",
+      icon: Utensils,
+      title: "Today's kitchen closing checklist not submitted",
+      description: metrics.latestKitchenChecklist
+        ? `Last submitted ${formatChecklistDateLabel(metrics.latestKitchenChecklist.date)} by ${metrics.latestKitchenChecklist.submittedBy}.`
+        : "No checklist history yet.",
+    });
+  }
+
+  if (metrics.kitchenChecklistAlerts.length > 0) {
+    attentionItems.push({
+      key: "kitchen-checklist-alerts",
+      icon: ShieldCheck,
+      title: `${metrics.kitchenChecklistAlerts.length} kitchen closing alert${metrics.kitchenChecklistAlerts.length > 1 ? "s" : ""}`,
+      description: metrics.kitchenChecklistAlerts.map((alert) => alert.item).join(", "),
+    });
+  }
+
   return (
     <Page title="Executive Dashboard" description="Live operational picture for Blue Hills Camp." action="Print Manager Pack" icon={Printer}>
       <div className="kpi-grid">
@@ -2152,6 +2426,14 @@ function Dashboard({
           icon={Activity}
           trend={metrics.openSafetyIncidents > 0 ? `${metrics.openSafetyIncidents} safety report${metrics.openSafetyIncidents > 1 ? "s" : ""} open` : "No open safety reports"}
           tone={metrics.activityEquipmentAlerts.length > 0 || metrics.openSafetyIncidents > 0 ? "warning" : undefined}
+        />
+        <KpiCard
+          label="Restaurant Today"
+          value={state.orders.length.toString()}
+          helper={`${money.format(metrics.restaurantRevenueToday)} in POS sales`}
+          icon={Utensils}
+          trend={`${metrics.openKitchenTickets} order${metrics.openKitchenTickets === 1 ? "" : "s"} still open`}
+          tone={metrics.kitchenChecklistAlerts.length > 0 ? "warning" : undefined}
         />
       </div>
 
@@ -2629,24 +2911,39 @@ function FrontOffice({
 function RestaurantKitchen({
   state,
   onAdvanceKitchen,
-  onCompleteManualTask,
   onAdvanceComplaint,
+  onOpenOrderDrawer,
+  onOpenKitchenChecklistDrawer,
 }: {
   state: DemoState;
   onAdvanceKitchen: (id: string) => void;
-  onCompleteManualTask: (id: string) => void;
   onAdvanceComplaint: (id: string) => void;
+  onOpenOrderDrawer: (initialItem?: string) => void;
+  onOpenKitchenChecklistDrawer: () => void;
 }) {
+  const latestKitchenChecklist = getLatestKitchenChecklist(state.kitchenChecklists);
+  const checklistAlerts = computeKitchenChecklistAlerts(latestKitchenChecklist);
+  const checklistSubmittedToday = state.kitchenChecklists.some((checklist) => checklist.date === businessDateIso);
+
   return (
-    <Page title="Restaurant & Kitchen" description="Touch-friendly POS and kitchen display workflow." action="New POS Order" icon={ShoppingCart}>
+    <Page
+      title="Restaurant & Kitchen"
+      description="Touch-friendly POS and kitchen display workflow."
+      action="New POS Order"
+      onAction={() => onOpenOrderDrawer()}
+      icon={ShoppingCart}
+    >
       <div className="pos-layout">
         <section className="panel pos-panel">
-          <PanelHeader title="Restaurant POS" subtitle="Fast order taking with cash, card, or room charge." />
+          <PanelHeader title="Restaurant POS" subtitle="Tap an item to start an order - fast order taking with cash, card, or room charge." />
           <div className="menu-grid">
-            {["Chicken Burger", "Greek Salad", "Beef Skewers", "Breakfast Plate", "Mazoe Orange", "Castle Lite"].map((item) => (
-              <button className="menu-tile" key={item} type="button">
+            {MENU_CATALOG.map((item) => (
+              <button className="menu-tile" key={item.name} onClick={() => onOpenOrderDrawer(item.name)} type="button">
                 <Utensils size={18} />
-                {item}
+                <span>
+                  {item.name}
+                  <small>{money.format(item.price)}</small>
+                </span>
               </button>
             ))}
           </div>
@@ -2655,6 +2952,7 @@ function RestaurantKitchen({
         <section className="panel kitchen-board">
           <PanelHeader title="Kitchen Display" subtitle="Orders move from new to preparing to ready." />
           <div className="ticket-list">
+            {state.orders.length === 0 && <p className="muted">No orders yet. Place the first order from the POS.</p>}
             {state.orders.map((order) => (
               <article className="ticket" key={order.id}>
                 <div className="ticket-top">
@@ -2666,14 +2964,23 @@ function RestaurantKitchen({
                 </p>
                 <ul>
                   {order.items.map((item) => (
-                    <li key={item}>{item}</li>
+                    <li key={item.name}>
+                      {item.quantity}x {item.name}
+                    </li>
                   ))}
                 </ul>
+                {order.containsAlcohol && (
+                  <p className="muted">{order.ageVerified ? "Age verified at order time" : "Age not verified"}</p>
+                )}
                 <div className="ticket-footer">
                   <span>{money.format(order.total)}</span>
-                  <button className="primary-button small" onClick={() => onAdvanceKitchen(order.id)} type="button">
-                    Advance
-                  </button>
+                  {order.kitchenStatus === "Completed" ? (
+                    <Badge label={order.settledAt ? `Settled ${order.settledAt}` : "Settled"} />
+                  ) : (
+                    <button className="primary-button small" onClick={() => onAdvanceKitchen(order.id)} type="button">
+                      Advance
+                    </button>
+                  )}
                 </div>
               </article>
             ))}
@@ -2683,14 +2990,42 @@ function RestaurantKitchen({
 
       <div className="content-grid">
         <section className="panel">
-          <PanelHeader title="Shift Opening, Closing & Hygiene" subtitle="Menus, tables, cutlery, fridge temperatures, gas and pest-control checks." />
-          <div className="stack">
-            {state.manualTasks
-              .filter((task) => ["Restaurant", "Kitchen"].includes(task.area))
-              .map((task) => (
-                <ManualTaskCard key={task.id} task={task} onComplete={onCompleteManualTask} />
+          <PanelHeader
+            title="Kitchen Closing Checklist"
+            subtitle="Kitchen closing SOP and dining room open/close (Section F)."
+            action={
+              <button className="secondary-button" onClick={onOpenKitchenChecklistDrawer} type="button">
+                <Plus size={16} />
+                New Checklist
+              </button>
+            }
+          />
+          {latestKitchenChecklist ? (
+            <div className="dashboard-summary-grid">
+              <article className="summary-stat">
+                <span>Last Submitted</span>
+                <strong>{formatChecklistDateLabel(latestKitchenChecklist.date)}</strong>
+                <p>
+                  {latestKitchenChecklist.submittedBy} at {latestKitchenChecklist.submittedAt}
+                  {checklistSubmittedToday ? " - Submitted today" : " - Not submitted today"}
+                </p>
+              </article>
+              <article className="summary-stat">
+                <span>Fridge Temperature</span>
+                <strong>{latestKitchenChecklist.fridgeTempC}°C</strong>
+                <p>{latestKitchenChecklist.fridgeTempC > FRIDGE_SAFE_MAX_C ? `Above the ${FRIDGE_SAFE_MAX_C}°C safe limit` : "Within safe range"}</p>
+              </article>
+            </div>
+          ) : (
+            <p className="muted">No closing checklist submitted yet.</p>
+          )}
+          {checklistAlerts.length > 0 && (
+            <div className="attention-list">
+              {checklistAlerts.map((alert) => (
+                <Attention key={`${alert.section}-${alert.item}`} icon={ClipboardCheck} title={alert.item} description={alert.section} />
               ))}
-          </div>
+            </div>
+          )}
         </section>
 
         <section className="panel">
@@ -2719,11 +3054,10 @@ function RestaurantKitchen({
       </div>
 
       <section className="panel">
-        <PanelHeader title="Manual Controls Still Required" subtitle="Visible reminders for service standards the POS must eventually enforce." />
+        <PanelHeader title="Still To Digitize" subtitle="Genuine gaps that remain after order taking and the closing checklist above." />
         <div className="control-grid">
-          <ControlCard title="Manager Void Approval" detail="Wrong POS orders must be voided by assistant manager or above." status="Not Wired" />
-          <ControlCard title="Bar Age Verification" detail="Alcoholic beverage orders require legal drinking-age verification." status="Required" />
-          <ControlCard title="Bill Folder Settlement" detail="Waiter double-checks bill, presents folder, processes payment in 4-5 minutes." status="Demo Script" />
+          <ControlCard title="Manager Void Approval" detail="Wrong POS orders must be voided by assistant manager or above - no void flow exists yet." status="Not Wired" />
+          <ControlCard title="Bill Folder Settlement Timing" detail="Placed and settled times are now captured per order; the 4-5 minute service standard still isn't measured against a target." status="Partial" />
           <ControlCard title="Breakage Register" detail="Crockery, cutlery and careless breakages must be recorded and reported." status="Missing" />
         </div>
       </section>
@@ -3653,7 +3987,7 @@ function ReservationDrawer({
               <div className="task-card" key={order.id}>
                 <div>
                   <strong>{order.id}</strong>
-                  <span>{order.items.join(", ")}</span>
+                  <span>{order.items.map((item) => `${item.quantity}x ${item.name}`).join(", ")}</span>
                 </div>
                 <strong>{money.format(order.total)}</strong>
               </div>
@@ -4783,6 +5117,238 @@ function SafetyIncidentModal({
         </button>
       </div>
     </Modal>
+  );
+}
+
+function OrderDrawer({
+  initialItem,
+  onClose,
+  onSave,
+}: {
+  initialItem?: string;
+  onClose: () => void;
+  onSave: (values: PosOrderFormValues) => void;
+}) {
+  const [table, setTable] = useState("");
+  const [guest, setGuest] = useState("");
+  const [waiter, setWaiter] = useState("");
+  const [payment, setPayment] = useState<PosOrder["payment"]>("Cash");
+  const [cart, setCart] = useState<OrderLineItem[]>(() => {
+    if (!initialItem) return [];
+    const menuItem = MENU_BY_NAME[initialItem];
+    return menuItem ? [{ name: menuItem.name, price: menuItem.price, quantity: 1 }] : [];
+  });
+  const [ageVerified, setAgeVerified] = useState(false);
+
+  const addItem = (name: string) => {
+    const menuItem = MENU_BY_NAME[name];
+    if (!menuItem) return;
+    setCart((current) => {
+      const existing = current.find((line) => line.name === name);
+      if (existing) {
+        return current.map((line) => (line.name === name ? { ...line, quantity: line.quantity + 1 } : line));
+      }
+      return [...current, { name: menuItem.name, price: menuItem.price, quantity: 1 }];
+    });
+  };
+
+  const changeQuantity = (name: string, delta: number) => {
+    setCart((current) =>
+      current
+        .map((line) => (line.name === name ? { ...line, quantity: line.quantity + delta } : line))
+        .filter((line) => line.quantity > 0),
+    );
+  };
+
+  const removeItem = (name: string) => {
+    setCart((current) => current.filter((line) => line.name !== name));
+  };
+
+  const total = cart.reduce((sum, line) => sum + line.price * line.quantity, 0);
+  const containsAlcohol = cart.some((line) => MENU_BY_NAME[line.name]?.category === "Alcohol");
+  const canSave = Boolean(table && guest && waiter && cart.length > 0 && (!containsAlcohol || ageVerified));
+
+  return (
+    <Drawer title="New POS Order" description="Fast order taking with cash, card, or room charge." onClose={onClose}>
+      <div className="form-grid">
+        <Field label="Table / Location">
+          <input value={table} onChange={(event) => setTable(event.target.value)} placeholder="e.g. Table 4" />
+        </Field>
+        <Field label="Guest">
+          <input value={guest} onChange={(event) => setGuest(event.target.value)} placeholder="e.g. Tariro Moyo" />
+        </Field>
+        <Field label="Waiter">
+          <input value={waiter} onChange={(event) => setWaiter(event.target.value)} placeholder="e.g. Lynette" />
+        </Field>
+        <Field label="Payment Method">
+          <select value={payment} onChange={(event) => setPayment(event.target.value as PosOrder["payment"])}>
+            <option>Cash</option>
+            <option>Card</option>
+            <option>Room Charge</option>
+          </select>
+        </Field>
+      </div>
+
+      <section className="form-section">
+        <h3>Menu</h3>
+        <div className="menu-grid">
+          {MENU_CATALOG.map((item) => (
+            <button className="menu-tile" key={item.name} onClick={() => addItem(item.name)} type="button">
+              <Utensils size={18} />
+              <span>
+                {item.name}
+                <small>{money.format(item.price)}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="form-section">
+        <h3>Order Items</h3>
+        {cart.length === 0 ? (
+          <p className="muted">Tap a menu item to add it to this order.</p>
+        ) : (
+          <div className="stack">
+            {cart.map((line) => (
+              <div className="folio-line" key={line.name}>
+                <div>
+                  <strong>{line.name}</strong>
+                  <span className="muted block">{money.format(line.price)} each</span>
+                </div>
+                <div className="qty-stepper">
+                  <button className="icon-button" onClick={() => changeQuantity(line.name, -1)} type="button" aria-label={`Remove one ${line.name}`}>
+                    <Minus size={14} />
+                  </button>
+                  <span>{line.quantity}</span>
+                  <button className="icon-button" onClick={() => changeQuantity(line.name, 1)} type="button" aria-label={`Add one ${line.name}`}>
+                    <Plus size={14} />
+                  </button>
+                  <strong>{money.format(line.price * line.quantity)}</strong>
+                  <button className="icon-button" onClick={() => removeItem(line.name)} type="button" aria-label={`Remove ${line.name}`}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+            <div className="folio-line total">
+              <span>Total</span>
+              <strong>{money.format(total)}</strong>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {containsAlcohol && (
+        <label className="checkbox-row">
+          <input checked={ageVerified} onChange={(event) => setAgeVerified(event.target.checked)} type="checkbox" />
+          Guest's legal drinking age has been verified (Section H)
+        </label>
+      )}
+
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button
+          className="primary-button"
+          disabled={!canSave}
+          onClick={() => onSave({ table, guest, waiter, payment, items: cart, ageVerified })}
+          type="button"
+        >
+          Send to Kitchen
+        </button>
+      </div>
+    </Drawer>
+  );
+}
+
+function KitchenChecklistDrawer({
+  onClose,
+  onSave,
+}: {
+  onClose: () => void;
+  onSave: (values: KitchenChecklistFormValues) => void;
+}) {
+  const [date, setDate] = useState(todayIsoDate());
+  const [submittedBy, setSubmittedBy] = useState("");
+  const [fridgeTempC, setFridgeTempC] = useState(4);
+  const [items, setItems] = useState<KitchenChecklistItem[]>(createDefaultKitchenChecklistItems());
+  const [notes, setNotes] = useState("");
+
+  const toggleItem = (index: number) => {
+    setItems((current) =>
+      current.map((item, itemIndex) => (itemIndex === index ? { ...item, status: item.status === "Done" ? "Pending" : "Done" } : item)),
+    );
+  };
+
+  const pendingCount = items.filter((item) => item.status === "Pending").length;
+  const fridgeSafe = fridgeTempC <= FRIDGE_SAFE_MAX_C;
+
+  return (
+    <Drawer
+      title="Kitchen Closing Checklist"
+      description="Kitchen closing SOP and dining room open/close, in one submission (Section F)."
+      onClose={onClose}
+    >
+      <div className="form-grid">
+        <Field label="Checklist Date">
+          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+        </Field>
+        <Field label="Submitted By">
+          <input value={submittedBy} onChange={(event) => setSubmittedBy(event.target.value)} placeholder="e.g. Chef" />
+        </Field>
+        <Field label="Fridge Temperature (°C)">
+          <input min={-5} max={20} onChange={(event) => setFridgeTempC(Number(event.target.value))} type="number" value={fridgeTempC} />
+        </Field>
+      </div>
+
+      {!fridgeSafe && (
+        <div className="finding-banner blocked">
+          {fridgeTempC}°C is above the {FRIDGE_SAFE_MAX_C}°C safe storage limit - flag for maintenance before closing.
+        </div>
+      )}
+
+      {KITCHEN_CHECKLIST_SECTIONS.map((section) => (
+        <section className="checklist-section" key={section}>
+          <h3>{section}</h3>
+          <div className="stack">
+            {items.map((item, index) =>
+              item.section === section ? (
+                <label className="checklist-toggle-row" key={item.label}>
+                  <span>{item.label}</span>
+                  <button
+                    className={`checklist-toggle ${item.status === "Done" ? "pass" : "fail"}`}
+                    onClick={() => toggleItem(index)}
+                    type="button"
+                  >
+                    {item.status}
+                  </button>
+                </label>
+              ) : null,
+            )}
+          </div>
+        </section>
+      ))}
+
+      <Field label="Notes (optional)">
+        <textarea onChange={(event) => setNotes(event.target.value)} rows={2} value={notes} placeholder="e.g. Equipment fault, escalated to maintenance" />
+      </Field>
+
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button
+          className="primary-button"
+          disabled={!date || !submittedBy}
+          onClick={() => onSave({ date, submittedBy, fridgeTempC, items, notes })}
+          type="button"
+        >
+          Submit Checklist {pendingCount > 0 ? `(${pendingCount} pending)` : ""}
+        </button>
+      </div>
+    </Drawer>
   );
 }
 

@@ -963,6 +963,31 @@ tr:hover td {
   border-color: #0f4c81;
 }
 
+.menu-tile span {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menu-tile small {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.qty-stepper {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.qty-stepper span {
+  font-weight: 800;
+  min-width: 18px;
+  text-align: center;
+}
+
 .ticket-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
