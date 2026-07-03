@@ -188,13 +188,75 @@ type PurchaseRequest = {
   status: ApprovalStatus;
 };
 
+type ActivityType = "Zipline" | "Quad Bike" | "Mountaineering" | "Putt Putt" | "Biking";
+
 type ActivityBooking = {
   id: string;
-  activity: string;
+  activity: ActivityType;
   guest: string;
+  participants: number;
+  date: string;
   time: string;
   instructor: string;
   status: "Booked" | "In Progress" | "Closed";
+  price: number;
+  ageConfirmed: boolean;
+  guardianPresent: boolean;
+  weightKg?: number;
+  medicalClear: boolean;
+  indemnitySigned: boolean;
+  notes?: string;
+};
+
+type ActivityBookingFormValues = {
+  activity: ActivityType;
+  guest: string;
+  participants: number;
+  date: string;
+  time: string;
+  instructor: string;
+  price: number;
+  ageConfirmed: boolean;
+  guardianPresent: boolean;
+  weightKg: string;
+  medicalClear: boolean;
+  indemnitySigned: boolean;
+  notes: string;
+};
+
+type ChecklistItemStatus = "Pass" | "Fail";
+
+type ActivityChecklistItem = {
+  label: string;
+  status: ChecklistItemStatus;
+};
+
+type WeatherCondition = "Clear" | "Thunder/Lightning" | "Extreme Heat" | "Heavy Rain" | "Unsafe Wind";
+
+type ActivityDailyChecklist = {
+  id: string;
+  activity: ActivityType;
+  date: string;
+  submittedBy: string;
+  submittedAt: string;
+  weather: WeatherCondition;
+  items: ActivityChecklistItem[];
+  notes?: string;
+};
+
+type ActivityChecklistFormValues = {
+  activity: ActivityType;
+  date: string;
+  submittedBy: string;
+  weather: WeatherCondition;
+  items: ActivityChecklistItem[];
+  notes: string;
+};
+
+type ActivityEquipmentAlert = {
+  activity: ActivityType;
+  item: string;
+  checklistDate: string;
 };
 
 type Enquiry = {
@@ -240,12 +302,46 @@ type Complaint = {
   status: "Logged" | "Manager Review" | "Resolved";
 };
 
-type SafetyRecord = {
+type IncidentNature =
+  | "Abrasions/Scrapes"
+  | "Bruising"
+  | "Sprain/Strain"
+  | "Cut/Laceration"
+  | "Broken Bone"
+  | "Concussion"
+  | "Heat/Sickness"
+  | "Other";
+
+type SafetyIncidentReport = {
   id: string;
-  activity: string;
-  check: string;
-  status: "Passed" | "Blocked" | "Report Required";
-  owner: string;
+  activity: ActivityType;
+  participantName: string;
+  operatorName: string;
+  date: string;
+  time: string;
+  natureOfInjury: IncidentNature;
+  firstAidProvided: boolean;
+  ambulanceCalled: boolean;
+  etdPerformed: boolean;
+  causeOfIncident: string;
+  actionTaken: string;
+  witnessName?: string;
+  status: "Logged" | "Manager Review" | "Resolved";
+};
+
+type SafetyIncidentFormValues = {
+  activity: ActivityType;
+  participantName: string;
+  operatorName: string;
+  date: string;
+  time: string;
+  natureOfInjury: IncidentNature;
+  firstAidProvided: boolean;
+  ambulanceCalled: boolean;
+  etdPerformed: boolean;
+  causeOfIncident: string;
+  actionTaken: string;
+  witnessName: string;
 };
 
 type CashControl = {
@@ -296,7 +392,8 @@ type DemoState = {
   messages: GuestMessage[];
   keyLogs: KeyLog[];
   complaints: Complaint[];
-  safetyRecords: SafetyRecord[];
+  safetyIncidents: SafetyIncidentReport[];
+  activityChecklists: ActivityDailyChecklist[];
   cashControls: CashControl[];
   reports: ReportRun[];
   receipts: Receipt[];
@@ -304,7 +401,7 @@ type DemoState = {
   housekeepingChecklists: HousekeepingChecklist[];
 };
 
-const storageKey = "blue-hills-erp-demo-v2";
+const storageKey = "blue-hills-erp-demo-v3";
 
 const LODGE_ORDER: Lodge[] = ["Zebra", "Kudu", "Impala", "Dormitory"];
 
@@ -341,6 +438,51 @@ const AMENITY_CATALOG: Array<{ name: string; reorderLevel: number }> = [
   { name: "White sugar sachets", reorderLevel: 50 },
   { name: "Brown sugar sachets", reorderLevel: 20 },
 ];
+
+const ACTIVITY_TYPES: ActivityType[] = ["Zipline", "Quad Bike", "Mountaineering", "Putt Putt", "Biking"];
+
+const WEATHER_CONDITIONS: WeatherCondition[] = ["Clear", "Thunder/Lightning", "Extreme Heat", "Heavy Rain", "Unsafe Wind"];
+
+const INCIDENT_NATURES: IncidentNature[] = [
+  "Abrasions/Scrapes",
+  "Bruising",
+  "Sprain/Strain",
+  "Cut/Laceration",
+  "Broken Bone",
+  "Concussion",
+  "Heat/Sickness",
+  "Other",
+];
+
+// Pre-use inspection items per Annexes 3 and 6, extended to the manual's other activity chapters.
+const ACTIVITY_CHECKLIST_TEMPLATE: Record<ActivityType, string[]> = {
+  Zipline: ["Harnesses", "Slider assemblies / sling lines", "Cable, pulleys & steel structure", "Nuts & bolts", "Helmets", "Braking system"],
+  "Quad Bike": [
+    "Tyres & pressure",
+    "Steering & suspension bushes",
+    "Front & rear shock absorbers",
+    "Front & rear brakes",
+    "Throttle",
+    "Drive chain",
+    "Oil level",
+    "Fuel level & line",
+  ],
+  Biking: ["Tyres & pressure", "Brakes front & back", "Gears & chain", "Frame & handlebars", "Helmets"],
+  Mountaineering: ["First aid kit stocked", "Water supplies", "Trail markers & signage", "Radio / communication check"],
+  "Putt Putt": ["Course surface & holes", "Clubs & balls", "Scorecards stocked", "Safety signage posted"],
+};
+
+const ACTIVITY_PRICE: Record<ActivityType, number> = {
+  Zipline: 45,
+  "Quad Bike": 60,
+  Mountaineering: 25,
+  "Putt Putt": 10,
+  Biking: 20,
+};
+
+function createDefaultActivityChecklistItems(activity: ActivityType): ActivityChecklistItem[] {
+  return ACTIVITY_CHECKLIST_TEMPLATE[activity].map((label) => ({ label, status: "Pass" as ChecklistItemStatus }));
+}
 
 const money = new Intl.NumberFormat("en-ZW", {
   style: "currency",
@@ -389,6 +531,11 @@ type DashboardMetrics = {
   pendingPurchases: number;
   newKitchenOrders: number;
   activeActivities: number;
+  activitiesToday: ActivityBooking[];
+  activitiesRevenueToday: number;
+  openSafetyIncidents: number;
+  activityEquipmentAlerts: ActivityEquipmentAlert[];
+  arrivalsAwaitingActivity: Reservation[];
 };
 
 function todayIsoDate() {
@@ -570,6 +717,31 @@ function getLatestChecklist(checklists: HousekeepingChecklist[]) {
   return [...checklists].sort((a, b) => b.date.localeCompare(a.date))[0];
 }
 
+function getLatestActivityChecklists(checklists: ActivityDailyChecklist[]): Partial<Record<ActivityType, ActivityDailyChecklist>> {
+  const latest: Partial<Record<ActivityType, ActivityDailyChecklist>> = {};
+  [...checklists]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .forEach((checklist) => {
+      latest[checklist.activity] = checklist;
+    });
+  return latest;
+}
+
+function computeActivityEquipmentAlerts(checklists: ActivityDailyChecklist[]): ActivityEquipmentAlert[] {
+  const latest = getLatestActivityChecklists(checklists);
+  const alerts: ActivityEquipmentAlert[] = [];
+
+  ACTIVITY_TYPES.forEach((activity) => {
+    const checklist = latest[activity];
+    if (!checklist) return;
+    checklist.items
+      .filter((item) => item.status === "Fail")
+      .forEach((item) => alerts.push({ activity, item: item.label, checklistDate: checklist.date }));
+  });
+
+  return alerts;
+}
+
 function summarizeRoomStatuses(rooms: Room[]): RoomStatusSummary {
   const byLodge = LODGE_ORDER.reduce(
     (accumulator, lodge) => ({
@@ -610,11 +782,15 @@ function buildDashboardMetrics(state: DemoState): DashboardMetrics {
   const latestChecklist = getLatestChecklist(state.housekeepingChecklists);
   const roomSummary = summarizeRoomStatuses(state.rooms);
 
+  const arrivalsToday = state.reservations.filter(
+    (reservation) => reservation.arrival === businessDateLabel && reservation.status !== "Checked In" && reservation.status !== "Cancelled",
+  );
+  const activitiesToday = state.activities.filter((booking) => booking.date === businessDateLabel && booking.status !== "Closed");
+  const bookedGuestNames = new Set(state.activities.filter((booking) => booking.date === businessDateLabel).map((booking) => booking.guest.toLowerCase()));
+
   return {
     inHouseGuests: state.reservations.filter((reservation) => reservation.status === "Checked In"),
-    arrivalsToday: state.reservations.filter(
-      (reservation) => reservation.arrival === businessDateLabel && reservation.status !== "Checked In" && reservation.status !== "Cancelled",
-    ),
+    arrivalsToday,
     departuresToday: state.reservations.filter(
       (reservation) => reservation.departure === businessDateLabel && reservation.status === "Checked In",
     ),
@@ -629,6 +805,11 @@ function buildDashboardMetrics(state: DemoState): DashboardMetrics {
     pendingPurchases: state.purchaseRequests.filter((request) => request.status === "Awaiting Approval").length,
     newKitchenOrders: state.orders.filter((order) => order.kitchenStatus === "New").length,
     activeActivities: state.activities.filter((booking) => booking.status === "In Progress").length,
+    activitiesToday,
+    activitiesRevenueToday: activitiesToday.reduce((sum, booking) => sum + booking.price, 0),
+    openSafetyIncidents: state.safetyIncidents.filter((report) => report.status !== "Resolved").length,
+    activityEquipmentAlerts: computeActivityEquipmentAlerts(state.activityChecklists),
+    arrivalsAwaitingActivity: arrivalsToday.filter((reservation) => !bookedGuestNames.has(reservation.guest.toLowerCase())),
   };
 }
 
@@ -781,19 +962,64 @@ function createSeedState(): DemoState {
     activities: [
       {
         id: "ACT-514",
-        activity: "Quad Bike Trail",
+        activity: "Quad Bike",
         guest: "Ncube Holdings",
+        participants: 2,
+        date: "Jul 03",
         time: "10:30",
         instructor: "Tawanda",
         status: "Booked",
+        price: 60,
+        ageConfirmed: true,
+        guardianPresent: false,
+        medicalClear: true,
+        indemnitySigned: true,
       },
       {
         id: "ACT-515",
-        activity: "Paintball",
-        guest: "Harare School Camp",
+        activity: "Zipline",
+        guest: "Nyasha Chikafu",
+        participants: 4,
+        date: "Jul 02",
         time: "14:00",
         instructor: "Chipo",
         status: "In Progress",
+        price: 45,
+        ageConfirmed: true,
+        guardianPresent: false,
+        weightKg: 68,
+        medicalClear: true,
+        indemnitySigned: true,
+      },
+    ],
+    activityChecklists: [
+      {
+        id: "AC-1",
+        activity: "Zipline",
+        date: "2026-07-02",
+        submittedBy: "Chipo",
+        submittedAt: "07:40",
+        weather: "Clear",
+        items: createDefaultActivityChecklistItems("Zipline"),
+      },
+      {
+        id: "AC-2",
+        activity: "Quad Bike",
+        date: "2026-07-02",
+        submittedBy: "Tawanda",
+        submittedAt: "07:55",
+        weather: "Clear",
+        items: [
+          { label: "Tyres & pressure", status: "Pass" },
+          { label: "Steering & suspension bushes", status: "Pass" },
+          { label: "Front & rear shock absorbers", status: "Pass" },
+          { label: "Front & rear brakes", status: "Fail" },
+          { label: "Throttle", status: "Pass" },
+          { label: "Drive chain", status: "Pass" },
+          { label: "Oil level", status: "Pass" },
+          { label: "Fuel level & line", status: "Pass" },
+        ],
+        notes: "Quad 03 rear brake spongy - pulled from the fleet pending mechanic sign-off.",
       },
     ],
     enquiries: [
@@ -831,7 +1057,6 @@ function createSeedState(): DemoState {
       { id: "MT-3", area: "Restaurant", item: "Opening checklist: menus, cutlery, glassware, tables", owner: "Head Waiter", status: "Done" },
       { id: "MT-4", area: "Kitchen", item: "Fridge temperatures, gas, bins and pest control log", owner: "Chef", status: "Pending" },
       { id: "MT-5", area: "Kudu 2", item: "Towels, soap, shower drainage, lights and verandah checked", owner: "Housekeeping", status: "Needs Attention" },
-      { id: "MT-6", area: "Quad Bikes", item: "Tyres, brakes, steering, fuel, oil and tool kit checked", owner: "Instructor", status: "Pending" },
     ],
     messages: [
       {
@@ -867,15 +1092,44 @@ function createSeedState(): DemoState {
       {
         id: "CMP-19",
         department: "Activities",
-        guest: "Harare School Camp",
-        issue: "Paintball queue order disputed by participant.",
+        guest: "Nyasha Chikafu",
+        issue: "Zipline queue order disputed by participant.",
         status: "Logged",
       },
     ],
-    safetyRecords: [
-      { id: "SAFE-1", activity: "Zipline", check: "Harnesses, helmets, pulley, sling lines and weather", status: "Passed", owner: "Chipo" },
-      { id: "SAFE-2", activity: "Quad Bike", check: "Brake fault found on Quad 03", status: "Blocked", owner: "Tawanda" },
-      { id: "SAFE-3", activity: "Paintball", check: "Masks counted, damaged overalls tagged", status: "Report Required", owner: "Nyasha" },
+    safetyIncidents: [
+      {
+        id: "INC-1",
+        activity: "Quad Bike",
+        participantName: "Tawanda Moyo",
+        operatorName: "Tawanda",
+        date: "Jul 01",
+        time: "11:20",
+        natureOfInjury: "Bruising",
+        firstAidProvided: true,
+        ambulanceCalled: false,
+        etdPerformed: false,
+        causeOfIncident: "Rider lost balance on a loose gravel bend and fell from the quad bike at low speed.",
+        actionTaken: "First aid applied to the forearm, rider rested for 20 minutes and was cleared to continue by the instructor.",
+        witnessName: "Chipo",
+        status: "Manager Review",
+      },
+      {
+        id: "INC-2",
+        activity: "Zipline",
+        participantName: "Blessing Ncube",
+        operatorName: "Chipo",
+        date: "Jun 28",
+        time: "15:05",
+        natureOfInjury: "Sprain/Strain",
+        firstAidProvided: true,
+        ambulanceCalled: false,
+        etdPerformed: false,
+        causeOfIncident: "Participant landed awkwardly on the platform and twisted an ankle.",
+        actionTaken: "Ice pack applied, participant escorted to reception, safety report filed and reviewed same day.",
+        witnessName: "Tawanda",
+        status: "Resolved",
+      },
     ],
     cashControls: [
       { id: "CASH-1", area: "Front Office Float", expected: 200, counted: 200, status: "Balanced" },
@@ -966,7 +1220,8 @@ function App() {
     const occupied = state.rooms.filter((room) => room.status === "Occupied").length;
     const revenue =
       state.orders.reduce((sum, order) => sum + order.total, 0) +
-      state.reservations.reduce((sum, reservation) => sum + (reservation.balance === 0 ? 320 : 0), 0);
+      state.reservations.reduce((sum, reservation) => sum + (reservation.balance === 0 ? 320 : 0), 0) +
+      state.activities.filter((booking) => booking.date === businessDateLabel).reduce((sum, booking) => sum + booking.price, 0);
     const outstanding = state.reservations.reduce((sum, reservation) => sum + reservation.balance, 0);
 
     return {
@@ -994,6 +1249,9 @@ function App() {
   const [receiptPreview, setReceiptPreview] = useState<Receipt | null>(null);
   const [checklistDrawerOpen, setChecklistDrawerOpen] = useState(false);
   const [checklistDetail, setChecklistDetail] = useState<HousekeepingChecklist | null>(null);
+  const [activityBookingDrawerOpen, setActivityBookingDrawerOpen] = useState(false);
+  const [activityChecklistDrawerOpen, setActivityChecklistDrawerOpen] = useState(false);
+  const [safetyIncidentModalOpen, setSafetyIncidentModalOpen] = useState(false);
 
   const openNewReservation = () => {
     setReservationPrefill(null);
@@ -1385,23 +1643,101 @@ function App() {
     );
   };
 
-  const advanceSafetyRecord = (id: string) => {
-    const record = state.safetyRecords.find((item) => item.id === id);
-    if (!record) return;
+  const saveActivityBooking = (values: ActivityBookingFormValues) => {
+    const id = `ACT-${520 + state.activities.length + Math.floor(Math.random() * 90)}`;
+    const newBooking: ActivityBooking = {
+      id,
+      activity: values.activity,
+      guest: values.guest,
+      participants: values.participants,
+      date: values.date,
+      time: values.time,
+      instructor: values.instructor,
+      status: "Booked",
+      price: values.price,
+      ageConfirmed: values.ageConfirmed,
+      guardianPresent: values.guardianPresent,
+      weightKg: values.weightKg ? Number(values.weightKg) : undefined,
+      medicalClear: values.medicalClear,
+      indemnitySigned: values.indemnitySigned,
+      notes: values.notes || undefined,
+    };
 
-    const nextStatus: Record<SafetyRecord["status"], SafetyRecord["status"]> = {
-      Passed: "Passed",
-      Blocked: "Report Required",
-      "Report Required": "Passed",
+    withAudit(
+      { ...state, activities: [newBooking, ...state.activities] },
+      `${id} booked for ${values.guest}: ${values.activity} on ${values.date} at ${values.time}`,
+      "Activities",
+    );
+    setActivityBookingDrawerOpen(false);
+  };
+
+  const saveActivityChecklist = (values: ActivityChecklistFormValues) => {
+    const id = `AC-${Date.now().toString().slice(-6)}`;
+    const checklist: ActivityDailyChecklist = {
+      id,
+      activity: values.activity,
+      date: values.date,
+      submittedBy: values.submittedBy,
+      submittedAt: nowTime(),
+      weather: values.weather,
+      items: values.items,
+      notes: values.notes || undefined,
+    };
+
+    const failedItems = values.items.filter((item) => item.status === "Fail").map((item) => item.label);
+
+    withAudit(
+      { ...state, activityChecklists: [checklist, ...state.activityChecklists] },
+      `${values.activity} pre-use checklist submitted by ${values.submittedBy}${failedItems.length ? ` - FAILED: ${failedItems.join(", ")}` : " - all items passed"}`,
+      values.submittedBy,
+    );
+    setActivityChecklistDrawerOpen(false);
+  };
+
+  const saveSafetyIncident = (values: SafetyIncidentFormValues) => {
+    const id = `INC-${Date.now().toString().slice(-6)}`;
+    const report: SafetyIncidentReport = {
+      id,
+      activity: values.activity,
+      participantName: values.participantName,
+      operatorName: values.operatorName,
+      date: values.date,
+      time: values.time,
+      natureOfInjury: values.natureOfInjury,
+      firstAidProvided: values.firstAidProvided,
+      ambulanceCalled: values.ambulanceCalled,
+      etdPerformed: values.etdPerformed,
+      causeOfIncident: values.causeOfIncident,
+      actionTaken: values.actionTaken,
+      witnessName: values.witnessName || undefined,
+      status: "Logged",
+    };
+
+    withAudit(
+      { ...state, safetyIncidents: [report, ...state.safetyIncidents] },
+      `${id} safety report filed for ${values.participantName} on ${values.activity} (${values.natureOfInjury})`,
+      values.operatorName,
+    );
+    setSafetyIncidentModalOpen(false);
+  };
+
+  const advanceSafetyIncident = (id: string) => {
+    const report = state.safetyIncidents.find((item) => item.id === id);
+    if (!report) return;
+
+    const nextStatus: Record<SafetyIncidentReport["status"], SafetyIncidentReport["status"]> = {
+      Logged: "Manager Review",
+      "Manager Review": "Resolved",
+      Resolved: "Resolved",
     };
 
     withAudit(
       {
         ...state,
-        safetyRecords: state.safetyRecords.map((item) => (item.id === id ? { ...item, status: nextStatus[item.status] } : item)),
+        safetyIncidents: state.safetyIncidents.map((item) => (item.id === id ? { ...item, status: nextStatus[item.status] } : item)),
       },
-      `${record.activity} safety record updated to ${nextStatus[record.status]}`,
-      record.owner,
+      `${id} moved to ${nextStatus[report.status]}`,
+      "Manager",
     );
   };
 
@@ -1555,11 +1891,16 @@ function App() {
           <Operations
             state={state}
             stockAlerts={stockAlerts}
+            equipmentAlerts={dashboardMetrics.activityEquipmentAlerts}
+            arrivalsAwaitingActivity={dashboardMetrics.arrivalsAwaitingActivity}
             onCompleteHousekeeping={completeHousekeeping}
             onCompleteManualTask={completeManualTask}
-            onAdvanceSafetyRecord={advanceSafetyRecord}
+            onAdvanceSafetyIncident={advanceSafetyIncident}
             onOpenChecklistDrawer={() => setChecklistDrawerOpen(true)}
             onOpenChecklistDetail={setChecklistDetail}
+            onOpenActivityBookingDrawer={() => setActivityBookingDrawerOpen(true)}
+            onOpenActivityChecklistDrawer={() => setActivityChecklistDrawerOpen(true)}
+            onOpenSafetyIncidentModal={() => setSafetyIncidentModalOpen(true)}
           />
         )}
         {activeModule === "procurement" && <Procurement state={state} onApprovePurchase={approvePurchase} />}
@@ -1617,6 +1958,18 @@ function App() {
       )}
 
       {checklistDetail && <HousekeepingChecklistDetailModal checklist={checklistDetail} onClose={() => setChecklistDetail(null)} />}
+
+      {activityBookingDrawerOpen && (
+        <ActivityBookingDrawer onClose={() => setActivityBookingDrawerOpen(false)} onSave={saveActivityBooking} />
+      )}
+
+      {activityChecklistDrawerOpen && (
+        <ActivityChecklistDrawer onClose={() => setActivityChecklistDrawerOpen(false)} onSave={saveActivityChecklist} />
+      )}
+
+      {safetyIncidentModalOpen && (
+        <SafetyIncidentModal onClose={() => setSafetyIncidentModalOpen(false)} onSave={saveSafetyIncident} />
+      )}
     </div>
   );
 }
@@ -1736,6 +2089,36 @@ function Dashboard({
     });
   }
 
+  if (metrics.activityEquipmentAlerts.length > 0) {
+    attentionItems.push({
+      key: "activity-equipment",
+      icon: ShieldCheck,
+      title: `${metrics.activityEquipmentAlerts.length} activity equipment alert${metrics.activityEquipmentAlerts.length > 1 ? "s" : ""}`,
+      description: metrics.activityEquipmentAlerts.map((alert) => `${alert.activity}: ${alert.item}`).join(", "),
+    });
+  }
+
+  if (metrics.openSafetyIncidents > 0) {
+    attentionItems.push({
+      key: "safety-incidents",
+      icon: ClipboardCheck,
+      title: `${metrics.openSafetyIncidents} safety report${metrics.openSafetyIncidents > 1 ? "s" : ""} awaiting review`,
+      description: state.safetyIncidents
+        .filter((report) => report.status !== "Resolved")
+        .map((report) => `${report.id} - ${report.participantName}`)
+        .join(", "),
+    });
+  }
+
+  if (metrics.arrivalsAwaitingActivity.length > 0) {
+    attentionItems.push({
+      key: "arrivals-no-activity",
+      icon: Hotel,
+      title: `${metrics.arrivalsAwaitingActivity.length} arrival${metrics.arrivalsAwaitingActivity.length > 1 ? "s" : ""} today with no activity booked`,
+      description: metrics.arrivalsAwaitingActivity.map((reservation) => `${reservation.guest} (${reservation.organisation})`).join(", "),
+    });
+  }
+
   return (
     <Page title="Executive Dashboard" description="Live operational picture for Blue Hills Camp." action="Print Manager Pack" icon={Printer}>
       <div className="kpi-grid">
@@ -1761,6 +2144,14 @@ function Dashboard({
           icon={FileText}
           trend={metrics.departuresToday.length > 0 ? `${metrics.departuresToday.length} departures today` : "No departures today"}
           tone="danger"
+        />
+        <KpiCard
+          label="Activities Today"
+          value={metrics.activitiesToday.length.toString()}
+          helper={`${money.format(metrics.activitiesRevenueToday)} booked for ${businessDateLabel}`}
+          icon={Activity}
+          trend={metrics.openSafetyIncidents > 0 ? `${metrics.openSafetyIncidents} safety report${metrics.openSafetyIncidents > 1 ? "s" : ""} open` : "No open safety reports"}
+          tone={metrics.activityEquipmentAlerts.length > 0 || metrics.openSafetyIncidents > 0 ? "warning" : undefined}
         />
       </div>
 
@@ -2343,24 +2734,36 @@ function RestaurantKitchen({
 function Operations({
   state,
   stockAlerts,
+  equipmentAlerts,
+  arrivalsAwaitingActivity,
   onCompleteHousekeeping,
   onCompleteManualTask,
-  onAdvanceSafetyRecord,
+  onAdvanceSafetyIncident,
   onOpenChecklistDrawer,
   onOpenChecklistDetail,
+  onOpenActivityBookingDrawer,
+  onOpenActivityChecklistDrawer,
+  onOpenSafetyIncidentModal,
 }: {
   state: DemoState;
   stockAlerts: StockAlert[];
+  equipmentAlerts: ActivityEquipmentAlert[];
+  arrivalsAwaitingActivity: Reservation[];
   onCompleteHousekeeping: (id: string) => void;
   onCompleteManualTask: (id: string) => void;
-  onAdvanceSafetyRecord: (id: string) => void;
+  onAdvanceSafetyIncident: (id: string) => void;
   onOpenChecklistDrawer: () => void;
   onOpenChecklistDetail: (checklist: HousekeepingChecklist) => void;
+  onOpenActivityBookingDrawer: () => void;
+  onOpenActivityChecklistDrawer: () => void;
+  onOpenSafetyIncidentModal: () => void;
 }) {
   const roomsByLodge = LODGE_ORDER.map((lodge) => ({
     lodge,
     rooms: state.rooms.filter((room) => room.lodge === lodge),
   }));
+
+  const latestActivityChecklists = getLatestActivityChecklists(state.activityChecklists);
 
   return (
     <Page
@@ -2480,27 +2883,76 @@ function Operations({
         </section>
       </div>
 
+      {arrivalsAwaitingActivity.length > 0 && (
+        <section className="panel">
+          <PanelHeader
+            title="Front Office Arrivals Awaiting an Activity"
+            subtitle="Today's arrival list from Front Office (Section 9.1) - none of these guests have an activity booked yet."
+          />
+          <div className="attention-list">
+            {arrivalsAwaitingActivity.map((reservation) => (
+              <Attention
+                key={reservation.id}
+                icon={DoorOpen}
+                title={`${reservation.guest} - ${reservation.organisation}`}
+                description={`Room ${reservation.room}, ${reservation.guests} guest${reservation.guests > 1 ? "s" : ""} - offer an activity on check-in`}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="panel">
-        <PanelHeader title="Activities Schedule" subtitle="Bookings with instructors and equipment accountability." />
+        <PanelHeader
+          title="Activities Schedule"
+          subtitle="Bookings with instructors, pricing and eligibility accountability."
+          action={
+            <button className="secondary-button" onClick={onOpenActivityBookingDrawer} type="button">
+              <Plus size={16} />
+              New Activity Booking
+            </button>
+          }
+        />
         <table>
           <thead>
             <tr>
               <th>Booking</th>
               <th>Activity</th>
               <th>Guest</th>
-              <th>Time</th>
+              <th>Participants</th>
+              <th>Date &amp; Time</th>
               <th>Instructor</th>
+              <th>Price</th>
+              <th>Eligibility</th>
               <th>Status</th>
             </tr>
           </thead>
           <tbody>
+            {state.activities.length === 0 && (
+              <tr>
+                <td colSpan={9}>
+                  <p className="muted">No activities booked yet. Create the first booking.</p>
+                </td>
+              </tr>
+            )}
             {state.activities.map((booking) => (
               <tr key={booking.id}>
                 <td>{booking.id}</td>
                 <td>{booking.activity}</td>
                 <td>{booking.guest}</td>
-                <td>{booking.time}</td>
+                <td>{booking.participants}</td>
+                <td>
+                  {booking.date} - {booking.time}
+                </td>
                 <td>{booking.instructor}</td>
+                <td>{money.format(booking.price)}</td>
+                <td>
+                  {booking.ageConfirmed && booking.medicalClear && booking.indemnitySigned ? (
+                    <Badge label="Cleared" />
+                  ) : (
+                    <Badge label="Incomplete" />
+                  )}
+                </td>
                 <td>
                   <Badge label={booking.status} />
                 </td>
@@ -2512,10 +2964,73 @@ function Operations({
 
       <div className="content-grid">
         <section className="panel">
+          <PanelHeader
+            title="Activity Pre-Use Checklists"
+            subtitle="One inspection per activity type before the course opens (Section 3.1, Annex 3 / 6)."
+            action={
+              <button className="secondary-button" onClick={onOpenActivityChecklistDrawer} type="button">
+                <Plus size={16} />
+                New Activity Checklist
+              </button>
+            }
+          />
+          <div className="stack">
+            {ACTIVITY_TYPES.map((activity) => {
+              const checklist = latestActivityChecklists[activity];
+              if (!checklist) {
+                return (
+                  <div className="task-card" key={activity}>
+                    <div>
+                      <strong>{activity}</strong>
+                      <span>No checklist submitted yet</span>
+                    </div>
+                    <Badge label="Missing" />
+                  </div>
+                );
+              }
+              const failedCount = checklist.items.filter((item) => item.status === "Fail").length;
+              const courseOpen = checklist.weather === "Clear" && failedCount === 0;
+              return (
+                <div className="task-card" key={activity}>
+                  <div>
+                    <strong>{activity}</strong>
+                    <span>
+                      {formatChecklistDateLabel(checklist.date)} by {checklist.submittedBy} - Weather: {checklist.weather}
+                    </span>
+                    {failedCount > 0 && <small>{failedCount} item{failedCount > 1 ? "s" : ""} failed inspection</small>}
+                  </div>
+                  <Badge label={courseOpen ? "Course Open" : "Course Closed"} />
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="panel">
+          <PanelHeader title="Equipment Alerts" subtitle="Any item marked Fail on the latest checklist for its activity." />
+          {equipmentAlerts.length === 0 ? (
+            <p className="muted">No equipment alerts from the latest checklists.</p>
+          ) : (
+            <div className="attention-list">
+              {equipmentAlerts.map((alert) => (
+                <Attention
+                  key={`${alert.activity}-${alert.item}`}
+                  icon={ShieldCheck}
+                  title={`${alert.activity}: ${alert.item}`}
+                  description={`Failed inspection on ${formatChecklistDateLabel(alert.checklistDate)} - course should stay closed until resolved.`}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      <div className="content-grid">
+        <section className="panel">
           <PanelHeader title="Room & Public Area Checklists" subtitle="Chalet, toilet, conference and administration checklist items from the manuals." />
           <div className="stack">
             {state.manualTasks
-              .filter((task) => ["Kudu 2", "Quad Bikes"].includes(task.area))
+              .filter((task) => ["Kudu 2"].includes(task.area))
               .map((task) => (
                 <ManualTaskCard key={task.id} task={task} onComplete={onCompleteManualTask} />
               ))}
@@ -2523,20 +3038,33 @@ function Operations({
         </section>
 
         <section className="panel">
-          <PanelHeader title="Activity Safety & Equipment" subtitle="Daily inspections, blocked equipment, damaged tags and safety report workflow." />
+          <PanelHeader
+            title="Safety Incident Reports"
+            subtitle="Injuries, near misses and emergency take-downs (Section 3.8, Annex 7)."
+            action={
+              <button className="secondary-button" onClick={onOpenSafetyIncidentModal} type="button">
+                <Plus size={16} />
+                New Report
+              </button>
+            }
+          />
           <div className="stack">
-            {state.safetyRecords.map((record) => (
-              <div className="task-card" key={record.id}>
+            {state.safetyIncidents.length === 0 && <p className="muted">No safety incidents logged.</p>}
+            {state.safetyIncidents.map((report) => (
+              <div className="task-card" key={report.id}>
                 <div>
                   <strong>
-                    {record.activity} - {record.check}
+                    {report.activity} - {report.natureOfInjury}
                   </strong>
-                  <span>Owner: {record.owner}</span>
+                  <span>
+                    {report.participantName} on {report.date} at {report.time} - operator {report.operatorName}
+                  </span>
+                  <small>{report.causeOfIncident}</small>
                 </div>
-                <Badge label={record.status} />
-                {record.status !== "Passed" && (
-                  <button className="secondary-button" onClick={() => onAdvanceSafetyRecord(record.id)} type="button">
-                    Update
+                <Badge label={report.status} />
+                {report.status !== "Resolved" && (
+                  <button className="secondary-button" onClick={() => onAdvanceSafetyIncident(report.id)} type="button">
+                    Advance
                   </button>
                 )}
               </div>
@@ -2546,12 +3074,11 @@ function Operations({
       </div>
 
       <section className="panel">
-        <PanelHeader title="Outdoor Activity Rules Still To Digitize" subtitle="These are critical safety workflows surfaced by the manuals." />
+        <PanelHeader title="Still To Digitize" subtitle="Genuine gaps that remain after the checklist, booking and incident workflows above." />
         <div className="control-grid">
-          <ControlCard title="Indemnity & Guardian Forms" detail="Minors require parent or guardian signature before zipline, quad bike, biking or mountaineering." status="Missing" />
-          <ControlCard title="Weather Restrictions" detail="Thunder, lightning, heavy rain, extreme heat and unsafe wind must block or pause activities." status="Missing" />
-          <ControlCard title="Medical Screening" detail="Pregnancy, heart conditions, surgery, neck/back issues and alcohol/drug checks affect eligibility." status="Missing" />
-          <ControlCard title="Emergency Take-Down Report" detail="Near misses, injuries, panic events and equipment failure must produce safety reports within 24 hours." status="Required" />
+          <ControlCard title="Signed Waiver Capture" detail="Indemnity is confirmed by checkbox at booking; a stored signature or photo per Annex 2 / 5 is not yet captured." status="Partial" />
+          <ControlCard title="Equipment Asset Register" detail="Checklists log pass/fail per activity, but individual quad bikes and bikes aren't tracked as serialized assets with a maintenance history (Section 5.6 / 8.6)." status="Missing" />
+          <ControlCard title="Operator Certification" detail="Instructor is a free-text name; certification status and monthly emergency take-down drills (Section 2) aren't tracked." status="Missing" />
         </div>
       </section>
     </Page>
@@ -3899,6 +4426,360 @@ function HousekeepingChecklistDetailModal({
         <button className="primary-button" onClick={copySummary} type="button">
           <ClipboardCopy size={16} />
           {copied ? "Copied!" : "Copy as WhatsApp Text"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function ActivityBookingDrawer({
+  onClose,
+  onSave,
+}: {
+  onClose: () => void;
+  onSave: (values: ActivityBookingFormValues) => void;
+}) {
+  const [activity, setActivity] = useState<ActivityType>("Zipline");
+  const [guest, setGuest] = useState("");
+  const [participants, setParticipants] = useState(1);
+  const [date, setDate] = useState(dates[0]);
+  const [time, setTime] = useState("09:00");
+  const [instructor, setInstructor] = useState("");
+  const [price, setPrice] = useState(ACTIVITY_PRICE.Zipline);
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [guardianPresent, setGuardianPresent] = useState(false);
+  const [weightKg, setWeightKg] = useState("");
+  const [medicalClear, setMedicalClear] = useState(false);
+  const [indemnitySigned, setIndemnitySigned] = useState(false);
+  const [notes, setNotes] = useState("");
+
+  const updateActivity = (next: ActivityType) => {
+    setActivity(next);
+    setPrice(ACTIVITY_PRICE[next]);
+  };
+
+  const eligibilityMet = ageConfirmed && medicalClear && indemnitySigned;
+
+  return (
+    <Drawer
+      title="New Activity Booking"
+      description="Captures the participant eligibility and indemnity the manual requires before anyone rides."
+      onClose={onClose}
+    >
+      <div className="form-grid">
+        <Field label="Activity">
+          <select value={activity} onChange={(event) => updateActivity(event.target.value as ActivityType)}>
+            {ACTIVITY_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Guest / Group">
+          <input value={guest} onChange={(event) => setGuest(event.target.value)} placeholder="e.g. Ncube Holdings" />
+        </Field>
+        <Field label="Participants">
+          <input min={1} onChange={(event) => setParticipants(Number(event.target.value))} type="number" value={participants} />
+        </Field>
+        <Field label="Instructor / Operator">
+          <input value={instructor} onChange={(event) => setInstructor(event.target.value)} placeholder="e.g. Chipo" />
+        </Field>
+        <Field label="Date">
+          <select value={date} onChange={(event) => setDate(event.target.value)}>
+            {dates.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Time">
+          <input onChange={(event) => setTime(event.target.value)} type="time" value={time} />
+        </Field>
+        <Field label="Price (USD)">
+          <input min={0} onChange={(event) => setPrice(Number(event.target.value))} type="number" value={price} />
+        </Field>
+        <Field label="Weight (kg, optional)">
+          <input onChange={(event) => setWeightKg(event.target.value)} placeholder="For zipline/quad weight limits" type="number" value={weightKg} />
+        </Field>
+      </div>
+
+      <section className="form-section">
+        <h3>Eligibility &amp; Indemnity (Section 4-8)</h3>
+        <label className="checkbox-row">
+          <input checked={ageConfirmed} onChange={(event) => setAgeConfirmed(event.target.checked)} type="checkbox" />
+          Participant is 18+, or a parent/guardian will be present to sign for a minor
+        </label>
+        <label className="checkbox-row">
+          <input checked={guardianPresent} onChange={(event) => setGuardianPresent(event.target.checked)} type="checkbox" />
+          Parent/guardian confirmed present for any participant under 18
+        </label>
+        <label className="checkbox-row">
+          <input checked={medicalClear} onChange={(event) => setMedicalClear(event.target.checked)} type="checkbox" />
+          No disqualifying medical condition declared (pregnancy, heart, neck/back, recent surgery)
+        </label>
+        <label className="checkbox-row">
+          <input checked={indemnitySigned} onChange={(event) => setIndemnitySigned(event.target.checked)} type="checkbox" />
+          Indemnity / waiver form signed
+        </label>
+        {!eligibilityMet && <p className="muted">All three eligibility checks and the indemnity must be confirmed before the booking can be saved.</p>}
+      </section>
+
+      <Field label="Notes (optional)">
+        <textarea onChange={(event) => setNotes(event.target.value)} rows={2} value={notes} />
+      </Field>
+
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button
+          className="primary-button"
+          disabled={!guest || !instructor || !eligibilityMet}
+          onClick={() =>
+            onSave({
+              activity,
+              guest,
+              participants,
+              date,
+              time,
+              instructor,
+              price,
+              ageConfirmed,
+              guardianPresent,
+              weightKg,
+              medicalClear,
+              indemnitySigned,
+              notes,
+            })
+          }
+          type="button"
+        >
+          Save Booking
+        </button>
+      </div>
+    </Drawer>
+  );
+}
+
+function ActivityChecklistDrawer({
+  onClose,
+  onSave,
+}: {
+  onClose: () => void;
+  onSave: (values: ActivityChecklistFormValues) => void;
+}) {
+  const [activity, setActivity] = useState<ActivityType>("Zipline");
+  const [date, setDate] = useState(todayIsoDate());
+  const [submittedBy, setSubmittedBy] = useState("");
+  const [weather, setWeather] = useState<WeatherCondition>("Clear");
+  const [items, setItems] = useState<ActivityChecklistItem[]>(createDefaultActivityChecklistItems("Zipline"));
+  const [notes, setNotes] = useState("");
+
+  const updateActivity = (next: ActivityType) => {
+    setActivity(next);
+    setItems(createDefaultActivityChecklistItems(next));
+  };
+
+  const toggleItem = (index: number) => {
+    setItems((current) =>
+      current.map((item, itemIndex) => (itemIndex === index ? { ...item, status: item.status === "Pass" ? "Fail" : "Pass" } : item)),
+    );
+  };
+
+  const failedCount = items.filter((item) => item.status === "Fail").length;
+  const courseOpen = weather === "Clear" && failedCount === 0;
+
+  return (
+    <Drawer
+      title="Daily Activity Checklist"
+      description="Pre-use inspection required before the course opens (Section 3.1, Annex 3 / 6)."
+      onClose={onClose}
+    >
+      <div className="form-grid">
+        <Field label="Activity">
+          <select value={activity} onChange={(event) => updateActivity(event.target.value as ActivityType)}>
+            {ACTIVITY_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Checklist Date">
+          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+        </Field>
+        <Field label="Submitted By">
+          <input value={submittedBy} onChange={(event) => setSubmittedBy(event.target.value)} placeholder="Operator name" />
+        </Field>
+        <Field label="Weather Conditions">
+          <select value={weather} onChange={(event) => setWeather(event.target.value as WeatherCondition)}>
+            {WEATHER_CONDITIONS.map((condition) => (
+              <option key={condition} value={condition}>
+                {condition}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      <section className="checklist-section">
+        <h3>Pre-Use Equipment Inspection</h3>
+        <div className="stack">
+          {items.map((item, index) => (
+            <label className="checklist-toggle-row" key={item.label}>
+              <span>{item.label}</span>
+              <button
+                className={`checklist-toggle ${item.status === "Pass" ? "pass" : "fail"}`}
+                onClick={() => toggleItem(index)}
+                type="button"
+              >
+                {item.status}
+              </button>
+            </label>
+          ))}
+        </div>
+      </section>
+
+      <div className={courseOpen ? "finding-banner ok" : "finding-banner blocked"}>
+        {courseOpen
+          ? "All items pass and weather is clear - the course may open."
+          : `Course should stay closed: ${weather !== "Clear" ? `weather is ${weather}` : ""}${weather !== "Clear" && failedCount > 0 ? " and " : ""}${failedCount > 0 ? `${failedCount} item${failedCount > 1 ? "s" : ""} failed inspection` : ""}.`}
+      </div>
+
+      <Field label="Notes (optional)">
+        <textarea onChange={(event) => setNotes(event.target.value)} rows={2} value={notes} placeholder="e.g. Equipment pulled for repair, escalated to supervisor" />
+      </Field>
+
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button
+          className="primary-button"
+          disabled={!date || !submittedBy}
+          onClick={() => onSave({ activity, date, submittedBy, weather, items, notes })}
+          type="button"
+        >
+          Submit Checklist
+        </button>
+      </div>
+    </Drawer>
+  );
+}
+
+function SafetyIncidentModal({
+  onClose,
+  onSave,
+}: {
+  onClose: () => void;
+  onSave: (values: SafetyIncidentFormValues) => void;
+}) {
+  const [activity, setActivity] = useState<ActivityType>("Zipline");
+  const [participantName, setParticipantName] = useState("");
+  const [operatorName, setOperatorName] = useState("");
+  const [date, setDate] = useState(todayIsoDate());
+  const [time, setTime] = useState(nowTime());
+  const [natureOfInjury, setNatureOfInjury] = useState<IncidentNature>("Abrasions/Scrapes");
+  const [firstAidProvided, setFirstAidProvided] = useState(true);
+  const [ambulanceCalled, setAmbulanceCalled] = useState(false);
+  const [etdPerformed, setEtdPerformed] = useState(false);
+  const [causeOfIncident, setCauseOfIncident] = useState("");
+  const [actionTaken, setActionTaken] = useState("");
+  const [witnessName, setWitnessName] = useState("");
+
+  return (
+    <Modal
+      title="Safety / Incident Report"
+      description="Every injury, near miss or emergency take-down must be filed within 24 hours (Section 3.8, Annex 7)."
+      onClose={onClose}
+    >
+      <div className="form-grid">
+        <Field label="Activity">
+          <select value={activity} onChange={(event) => setActivity(event.target.value as ActivityType)}>
+            {ACTIVITY_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Participant Name">
+          <input value={participantName} onChange={(event) => setParticipantName(event.target.value)} />
+        </Field>
+        <Field label="Operator on Duty">
+          <input value={operatorName} onChange={(event) => setOperatorName(event.target.value)} />
+        </Field>
+        <Field label="Witness Name (optional)">
+          <input value={witnessName} onChange={(event) => setWitnessName(event.target.value)} />
+        </Field>
+        <Field label="Date">
+          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+        </Field>
+        <Field label="Time">
+          <input onChange={(event) => setTime(event.target.value)} type="time" value={time} />
+        </Field>
+        <Field label="Nature of Injury">
+          <select value={natureOfInjury} onChange={(event) => setNatureOfInjury(event.target.value as IncidentNature)}>
+            {INCIDENT_NATURES.map((nature) => (
+              <option key={nature} value={nature}>
+                {nature}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      <section className="form-section">
+        <h3>First Aid &amp; Emergency Response</h3>
+        <label className="checkbox-row">
+          <input checked={firstAidProvided} onChange={(event) => setFirstAidProvided(event.target.checked)} type="checkbox" />
+          First aid provided
+        </label>
+        <label className="checkbox-row">
+          <input checked={ambulanceCalled} onChange={(event) => setAmbulanceCalled(event.target.checked)} type="checkbox" />
+          Ambulance called
+        </label>
+        <label className="checkbox-row">
+          <input checked={etdPerformed} onChange={(event) => setEtdPerformed(event.target.checked)} type="checkbox" />
+          Emergency take-down (ETD) performed
+        </label>
+      </section>
+
+      <Field label="Cause of Incident">
+        <textarea onChange={(event) => setCauseOfIncident(event.target.value)} rows={3} value={causeOfIncident} placeholder="What happened, and were any rules broken?" />
+      </Field>
+      <Field label="Action Taken">
+        <textarea onChange={(event) => setActionTaken(event.target.value)} rows={3} value={actionTaken} placeholder="What did the operator(s) do in response?" />
+      </Field>
+
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button
+          className="primary-button"
+          disabled={!participantName || !operatorName || !causeOfIncident || !actionTaken}
+          onClick={() =>
+            onSave({
+              activity,
+              participantName,
+              operatorName,
+              date,
+              time,
+              natureOfInjury,
+              firstAidProvided,
+              ambulanceCalled,
+              etdPerformed,
+              causeOfIncident,
+              actionTaken,
+              witnessName,
+            })
+          }
+          type="button"
+        >
+          Submit Report
         </button>
       </div>
     </Modal>

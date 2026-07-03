@@ -426,7 +426,7 @@ textarea:focus-visible,
 .kpi-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .kpi-grid.three {
@@ -752,6 +752,21 @@ tr:hover td {
 .badge.staff {
   background: #ede9fe;
   color: #5b21b6;
+}
+
+.badge.pass,
+.badge.cleared,
+.badge.course-open {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badge.fail,
+.badge.logged,
+.badge.incomplete,
+.badge.course-closed {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .lodge-grid {
@@ -1225,6 +1240,56 @@ textarea {
   accent-color: #0f4c81;
   height: 18px;
   width: 18px;
+}
+
+.checklist-toggle-row {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e5ebf2;
+  border-radius: 12px;
+  display: flex;
+  font-weight: 700;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.checklist-toggle {
+  border: 0;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  min-height: 30px;
+  min-width: 68px;
+  text-transform: uppercase;
+}
+
+.checklist-toggle.pass {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.checklist-toggle.fail {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.finding-banner {
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 12px 14px;
+}
+
+.finding-banner.ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.finding-banner.blocked {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .folio-line {
