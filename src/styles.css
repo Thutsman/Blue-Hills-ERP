@@ -687,7 +687,8 @@ tr:hover td {
 .badge.returned,
 .badge.delivered,
 .badge.full-settlement,
-.badge.variance-approved {
+.badge.variance-approved,
+.badge.deposit-received {
   background: #dcfce7;
   color: #166534;
 }
@@ -701,6 +702,7 @@ tr:hover td {
 .badge.preparing,
 .badge.new,
 .badge.quoted,
+.badge.quotation-sent,
 .badge.follow-up,
 .badge.pending,
 .badge.partial,
@@ -747,7 +749,9 @@ tr:hover td {
 .badge.backend-needed,
 .badge.tauri-needed,
 .badge.trading,
-.badge.on-room-account {
+.badge.on-room-account,
+.badge.planning,
+.badge.procurement {
   background: #dbeafe;
   color: #1d4ed8;
 }
@@ -1191,8 +1195,14 @@ tr:hover td {
   padding: 20px 24px;
 }
 
+.table-scroll {
+  min-width: 0;
+  overflow-x: auto;
+}
+
 .sheet-footer {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-end;
 }

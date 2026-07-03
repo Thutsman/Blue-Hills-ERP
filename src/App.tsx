@@ -4,7 +4,9 @@ import {
   Banknote,
   BedDouble,
   Bell,
+  Building2,
   CalendarDays,
+  CalendarRange,
   ChefHat,
   CheckCircle2,
   ClipboardCheck,
@@ -17,6 +19,7 @@ import {
   KeyRound,
   Landmark,
   LayoutDashboard,
+  ListChecks,
   Lock,
   LogOut,
   Menu,
@@ -32,6 +35,7 @@ import {
   Sparkles,
   Trash2,
   TrendingUp,
+  Users,
   Utensils,
   Wallet,
   Warehouse,
@@ -46,7 +50,8 @@ type ModuleId =
   | "restaurant"
   | "operations"
   | "procurement"
-  | "finance";
+  | "finance"
+  | "conference";
 
 type ReservationStatus =
   | "Tentative"
@@ -149,6 +154,7 @@ type Reservation = {
   notes?: string;
   idNumber?: string;
   vehicle?: string;
+  conferenceId?: string;
 };
 
 type ReservationFormValues = {
@@ -202,6 +208,7 @@ type PosOrder = {
   ageVerified: boolean;
   placedAt: string;
   settledAt?: string;
+  conferenceId?: string;
 };
 
 type PosOrderFormValues = {
@@ -211,6 +218,7 @@ type PosOrderFormValues = {
   payment: PosOrder["payment"];
   items: OrderLineItem[];
   ageVerified: boolean;
+  conferenceId?: string;
 };
 
 type TaskCheckStatus = "Done" | "Pending";
@@ -335,6 +343,7 @@ type PurchaseRequest = {
   items: PurchaseLineItem[];
   estimatedTotal: number;
   status: PurchaseRequestStatus;
+  conferenceId?: string;
 };
 
 type PurchaseRequestFormValues = {
@@ -509,6 +518,7 @@ type ActivityBooking = {
   medicalClear: boolean;
   indemnitySigned: boolean;
   notes?: string;
+  conferenceId?: string;
 };
 
 type ActivityBookingFormValues = {
@@ -526,6 +536,7 @@ type ActivityBookingFormValues = {
   medicalClear: boolean;
   indemnitySigned: boolean;
   notes: string;
+  conferenceId?: string;
 };
 
 type ChecklistItemStatus = "Pass" | "Fail";
@@ -736,6 +747,229 @@ type BusinessDayRecord = {
   nightAuditRunId?: string;
 };
 
+// ---------------------------------------------------------------------------
+// Conference & Events: a conference is a cross-department project, not a
+// reservation. It coordinates accommodation, catering, activities,
+// procurement and finance from one record - see CONFERENCE_BOOKING.md.
+// ---------------------------------------------------------------------------
+
+type Client = {
+  id: string;
+  organisation: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  billingAddress?: string;
+  taxNumber?: string;
+  notes?: string;
+};
+
+type ClientFormValues = {
+  organisation: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  billingAddress: string;
+  taxNumber: string;
+  notes: string;
+};
+
+type ConferenceEventType =
+  | "Corporate Conference"
+  | "Government Workshop"
+  | "NGO Training"
+  | "Church Conference"
+  | "School Camp"
+  | "Sports Camp"
+  | "Wedding"
+  | "Birthday Event"
+  | "Private Function"
+  | "Team Building"
+  | "Leadership Training"
+  | "Custom Event";
+
+const CONFERENCE_EVENT_TYPES: ConferenceEventType[] = [
+  "Corporate Conference",
+  "Government Workshop",
+  "NGO Training",
+  "Church Conference",
+  "School Camp",
+  "Sports Camp",
+  "Wedding",
+  "Birthday Event",
+  "Private Function",
+  "Team Building",
+  "Leadership Training",
+  "Custom Event",
+];
+
+type ConferenceStatus =
+  | "Enquiry"
+  | "Quotation Sent"
+  | "Pending Approval"
+  | "Confirmed"
+  | "Deposit Received"
+  | "Planning"
+  | "Procurement"
+  | "Ready"
+  | "In Progress"
+  | "Completed"
+  | "Cancelled";
+
+const CONFERENCE_STATUS_ORDER: ConferenceStatus[] = [
+  "Enquiry",
+  "Quotation Sent",
+  "Pending Approval",
+  "Confirmed",
+  "Deposit Received",
+  "Planning",
+  "Procurement",
+  "Ready",
+  "In Progress",
+  "Completed",
+];
+
+type MealPackage = "Full Board" | "Half Board" | "Day Package" | "Custom";
+
+type ConferenceQuotation = {
+  accommodation: number;
+  conferenceHall: number;
+  breakfast: number;
+  lunch: number;
+  dinner: number;
+  teaBreaks: number;
+  activities: number;
+  transport: number;
+  equipmentHire: number;
+  otherServices: number;
+  vatRate: number;
+  depositRequired: number;
+  expiryDate: string;
+};
+
+type ConferenceBudgetCategory =
+  | "Accommodation"
+  | "Food"
+  | "Beverages"
+  | "Activities"
+  | "Transport"
+  | "Procurement"
+  | "Staff"
+  | "Cleaning"
+  | "Utilities"
+  | "Miscellaneous";
+
+const CONFERENCE_BUDGET_CATEGORIES: ConferenceBudgetCategory[] = [
+  "Accommodation",
+  "Food",
+  "Beverages",
+  "Activities",
+  "Transport",
+  "Procurement",
+  "Staff",
+  "Cleaning",
+  "Utilities",
+  "Miscellaneous",
+];
+
+type ConferenceBudgetLine = {
+  category: ConferenceBudgetCategory;
+  budgeted: number;
+};
+
+type Conference = {
+  id: string;
+  conferenceNumber: string;
+  name: string;
+  eventType: ConferenceEventType;
+  clientId: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  arrival: string;
+  departure: string;
+  guestCount: number;
+  roomsRequired: number;
+  conferenceHall: string;
+  mealPackage: MealPackage;
+  activityPackage?: string;
+  specialRequirements?: string;
+  status: ConferenceStatus;
+  quotation: ConferenceQuotation;
+  budgetLines: ConferenceBudgetLine[];
+  depositReceivedAmount?: number;
+  depositReceivedAt?: string;
+  createdAt: string;
+  notes?: string;
+};
+
+type ConferenceFormValues = {
+  name: string;
+  eventType: ConferenceEventType;
+  clientId: string;
+  newClientOrganisation: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  arrival: string;
+  departure: string;
+  guestCount: number;
+  roomsRequired: number;
+  conferenceHall: string;
+  mealPackage: MealPackage;
+  activityPackage: string;
+  specialRequirements: string;
+  accommodation: number;
+  conferenceHallFee: number;
+  breakfast: number;
+  lunch: number;
+  dinner: number;
+  teaBreaks: number;
+  activitiesFee: number;
+  transport: number;
+  equipmentHire: number;
+  otherServices: number;
+  vatRate: number;
+  depositRequired: number;
+  expiryDate: string;
+};
+
+type ConferenceDepartment = "Reception" | "Kitchen" | "Stores" | "Procurement" | "Housekeeping" | "Maintenance" | "Finance" | "Activities";
+
+const CONFERENCE_DEPARTMENTS: ConferenceDepartment[] = [
+  "Reception",
+  "Kitchen",
+  "Stores",
+  "Procurement",
+  "Housekeeping",
+  "Maintenance",
+  "Finance",
+  "Activities",
+];
+
+type ConferenceTaskStatus = "Pending" | "In Progress" | "Done" | "Blocked";
+type ConferenceTaskPriority = "Low" | "Medium" | "High";
+
+type ConferenceTask = {
+  id: string;
+  conferenceId: string;
+  department: ConferenceDepartment;
+  description: string;
+  owner: string;
+  dueDate: string;
+  priority: ConferenceTaskPriority;
+  status: ConferenceTaskStatus;
+  completedAt?: string;
+};
+
+type ConferenceTaskFormValues = {
+  department: ConferenceDepartment;
+  description: string;
+  owner: string;
+  dueDate: string;
+  priority: ConferenceTaskPriority;
+};
+
 type DemoState = {
   rooms: Room[];
   reservations: Reservation[];
@@ -764,9 +998,12 @@ type DemoState = {
   businessDay: BusinessDayRecord;
   audit: AuditItem[];
   housekeepingChecklists: HousekeepingChecklist[];
+  clients: Client[];
+  conferences: Conference[];
+  conferenceTasks: ConferenceTask[];
 };
 
-const storageKey = "blue-hills-erp-demo-v7";
+const storageKey = "blue-hills-erp-demo-v8";
 
 const LODGE_ORDER: Lodge[] = ["Zebra", "Kudu", "Impala", "Dormitory"];
 
@@ -975,6 +1212,7 @@ const navigation: Array<{ id: ModuleId; label: string; icon: LucideIcon }> = [
   { id: "operations", label: "Housekeeping & Activities", icon: BedDouble },
   { id: "procurement", label: "Procurement & Stores", icon: Warehouse },
   { id: "finance", label: "Finance & Night Audit", icon: CreditCard },
+  { id: "conference", label: "Conferences & Events", icon: CalendarRange },
 ];
 
 const dates = ["Jul 02", "Jul 03", "Jul 04", "Jul 05", "Jul 06", "Jul 07"];
@@ -1565,6 +1803,236 @@ function computeFinanceAlerts(state: DemoState): FinanceAlert[] {
   return alerts;
 }
 
+// ---------------------------------------------------------------------------
+// Conference & Events: budget vs actual, procurement generation, alerts.
+// A conference's "actual" figures are a live read of every other module's
+// data (matching records by conferenceId) - never a parallel ledger.
+// ---------------------------------------------------------------------------
+
+function conferenceNights(conference: Conference): number {
+  return Math.max(1, dates.indexOf(conference.departure) - dates.indexOf(conference.arrival));
+}
+
+function computeConferenceQuotationTotal(quotation: ConferenceQuotation): { subtotal: number; vat: number; total: number } {
+  const subtotal =
+    quotation.accommodation +
+    quotation.conferenceHall +
+    quotation.breakfast +
+    quotation.lunch +
+    quotation.dinner +
+    quotation.teaBreaks +
+    quotation.activities +
+    quotation.transport +
+    quotation.equipmentHire +
+    quotation.otherServices;
+  const vat = Number((subtotal * quotation.vatRate).toFixed(2));
+  return { subtotal, vat, total: Number((subtotal + vat).toFixed(2)) };
+}
+
+function computeConferenceBudgetTotals(conference: Conference): {
+  projectedRevenue: number;
+  projectedCost: number;
+  projectedProfit: number;
+  projectedMargin: number;
+} {
+  const projectedCost = conference.budgetLines.reduce((sum, line) => sum + line.budgeted, 0);
+  const { total: projectedRevenue } = computeConferenceQuotationTotal(conference.quotation);
+  const projectedProfit = projectedRevenue - projectedCost;
+  return {
+    projectedRevenue,
+    projectedCost,
+    projectedProfit,
+    projectedMargin: projectedRevenue > 0 ? projectedProfit / projectedRevenue : 0,
+  };
+}
+
+function computeConferenceRoomsAllocated(state: DemoState, conferenceId: string): number {
+  return state.reservations.filter((reservation) => reservation.conferenceId === conferenceId && reservation.status !== "Cancelled").length;
+}
+
+function computeConferenceDepositOutstanding(conference: Conference): number {
+  return Math.max(0, conference.quotation.depositRequired - (conference.depositReceivedAmount ?? 0));
+}
+
+type ConferenceFinancials = {
+  actualAccommodationRevenue: number;
+  actualFoodBeverageRevenue: number;
+  actualActivitiesRevenue: number;
+  actualRevenue: number;
+  actualProcurementCost: number;
+  actualNonProcurementCost: number;
+  actualCost: number;
+  actualProfit: number;
+};
+
+function computeConferenceFinancials(state: DemoState, conference: Conference): ConferenceFinancials {
+  const linkedReservations = state.reservations.filter(
+    (reservation) => reservation.conferenceId === conference.id && reservation.status !== "Cancelled",
+  );
+  const actualAccommodationRevenue = linkedReservations.reduce((sum, reservation) => {
+    const nights = Math.max(1, dates.indexOf(reservation.departure) - dates.indexOf(reservation.arrival));
+    return sum + nights * (reservation.rate ?? 0);
+  }, 0);
+
+  const linkedOrders = state.orders.filter((order) => order.conferenceId === conference.id);
+  const actualFoodBeverageRevenue = linkedOrders.reduce((sum, order) => sum + order.total, 0);
+
+  const linkedActivities = state.activities.filter((booking) => booking.conferenceId === conference.id);
+  const actualActivitiesRevenue = linkedActivities.reduce((sum, booking) => sum + booking.price, 0);
+
+  const actualRevenue = actualAccommodationRevenue + actualFoodBeverageRevenue + actualActivitiesRevenue;
+
+  const linkedRequestIds = new Set(
+    state.purchaseRequests.filter((request) => request.conferenceId === conference.id).map((request) => request.id),
+  );
+  const actualProcurementCost = state.purchaseOrders
+    .filter((order) => linkedRequestIds.has(order.requestId) && order.status !== "Cancelled")
+    .reduce((sum, order) => sum + order.total, 0);
+
+  const actualNonProcurementCost = conference.budgetLines
+    .filter((line) => line.category !== "Procurement")
+    .reduce((sum, line) => sum + line.budgeted, 0);
+
+  const actualCost = actualProcurementCost + actualNonProcurementCost;
+
+  return {
+    actualAccommodationRevenue,
+    actualFoodBeverageRevenue,
+    actualActivitiesRevenue,
+    actualRevenue,
+    actualProcurementCost,
+    actualNonProcurementCost,
+    actualCost,
+    actualProfit: actualRevenue - actualCost,
+  };
+}
+
+const CONFERENCE_MEAL_MULTIPLIER: Record<MealPackage, number> = {
+  "Full Board": 3,
+  "Half Board": 2,
+  "Day Package": 1,
+  Custom: 2,
+};
+
+const CONFERENCE_PROCUREMENT_TEMPLATE: Array<{ description: string; unit: string; perGuestPerMeal: number; unitCost: number }> = [
+  { description: "Chicken", unit: "kg", perGuestPerMeal: 0.15, unitCost: 4.5 },
+  { description: "Beef", unit: "kg", perGuestPerMeal: 0.1, unitCost: 5.5 },
+  { description: "Rice", unit: "kg", perGuestPerMeal: 0.12, unitCost: 1.4 },
+  { description: "Cooking Oil", unit: "ltrs", perGuestPerMeal: 0.03, unitCost: 3.2 },
+  { description: "Tea", unit: "kg", perGuestPerMeal: 0.01, unitCost: 6 },
+  { description: "Coffee", unit: "kg", perGuestPerMeal: 0.008, unitCost: 9 },
+  { description: "Milk", unit: "ltrs", perGuestPerMeal: 0.2, unitCost: 1.1 },
+  { description: "Bread", unit: "loaves", perGuestPerMeal: 0.3, unitCost: 1.3 },
+  { description: "Vegetables", unit: "kg", perGuestPerMeal: 0.2, unitCost: 1.6 },
+  { description: "Cleaning Materials", unit: "units", perGuestPerMeal: 0.02, unitCost: 2.5 },
+  { description: "Stationery", unit: "units", perGuestPerMeal: 0.05, unitCost: 0.8 },
+  { description: "Gas", unit: "kg", perGuestPerMeal: 0.01, unitCost: 3 },
+];
+
+function generateConferenceProcurementItems(conference: Conference): PurchaseLineItem[] {
+  const mealsPerDay = CONFERENCE_MEAL_MULTIPLIER[conference.mealPackage];
+  const mealCount = conferenceNights(conference) * mealsPerDay;
+  return CONFERENCE_PROCUREMENT_TEMPLATE.map((template) => {
+    const quantity = Math.max(1, Math.ceil(conference.guestCount * mealCount * template.perGuestPerMeal));
+    return {
+      description: `${template.description} (${template.unit})`,
+      quantity,
+      estimatedCost: Number((quantity * template.unitCost).toFixed(2)),
+    };
+  });
+}
+
+type ConferenceAlert = { key: string; icon: LucideIcon; title: string; description: string };
+
+function computeConferenceAlerts(state: DemoState): ConferenceAlert[] {
+  const alerts: ConferenceAlert[] = [];
+  const active = state.conferences.filter((conference) => conference.status !== "Cancelled" && conference.status !== "Completed");
+  const businessIndex = dates.indexOf(businessDateLabel);
+
+  const missingDeposit = active.filter(
+    (conference) =>
+      CONFERENCE_STATUS_ORDER.indexOf(conference.status) >= CONFERENCE_STATUS_ORDER.indexOf("Confirmed") &&
+      computeConferenceDepositOutstanding(conference) > 0,
+  );
+  if (missingDeposit.length > 0) {
+    alerts.push({
+      key: "conference-deposit",
+      icon: Wallet,
+      title: `${missingDeposit.length} conference${missingDeposit.length > 1 ? "s" : ""} awaiting deposit`,
+      description: missingDeposit
+        .map((conference) => `${conference.name} (${money.format(computeConferenceDepositOutstanding(conference))})`)
+        .join(", "),
+    });
+  }
+
+  const unallocated = active.filter(
+    (conference) =>
+      CONFERENCE_STATUS_ORDER.indexOf(conference.status) >= CONFERENCE_STATUS_ORDER.indexOf("Confirmed") &&
+      computeConferenceRoomsAllocated(state, conference.id) < conference.roomsRequired,
+  );
+  if (unallocated.length > 0) {
+    alerts.push({
+      key: "conference-rooms",
+      icon: BedDouble,
+      title: `${unallocated.length} conference${unallocated.length > 1 ? "s" : ""} with rooms still unallocated`,
+      description: unallocated
+        .map((conference) => `${conference.name} (${computeConferenceRoomsAllocated(state, conference.id)}/${conference.roomsRequired} rooms)`)
+        .join(", "),
+    });
+  }
+
+  const dueTasks = state.conferenceTasks.filter(
+    (task) => task.status !== "Done" && dates.indexOf(task.dueDate) !== -1 && dates.indexOf(task.dueDate) <= businessIndex,
+  );
+  if (dueTasks.length > 0) {
+    alerts.push({
+      key: "conference-tasks-due",
+      icon: ListChecks,
+      title: `${dueTasks.length} conference task${dueTasks.length > 1 ? "s" : ""} due today or overdue`,
+      description: dueTasks
+        .map((task) => {
+          const conference = state.conferences.find((item) => item.id === task.conferenceId);
+          return `${task.description} (${conference?.name ?? task.conferenceId})`;
+        })
+        .join(", "),
+    });
+  }
+
+  return alerts;
+}
+
+type ConferenceDashboardSummary = {
+  activeCount: number;
+  arrivingWithinWindow: number;
+  projectedRevenue: number;
+  projectedProfit: number;
+  openTasks: number;
+};
+
+function computeConferenceDashboardSummary(state: DemoState): ConferenceDashboardSummary {
+  const active = state.conferences.filter((conference) => conference.status !== "Cancelled" && conference.status !== "Completed");
+  const businessIndex = dates.indexOf(businessDateLabel);
+
+  const totals = active.reduce(
+    (sum, conference) => {
+      const budget = computeConferenceBudgetTotals(conference);
+      return {
+        projectedRevenue: sum.projectedRevenue + budget.projectedRevenue,
+        projectedProfit: sum.projectedProfit + budget.projectedProfit,
+      };
+    },
+    { projectedRevenue: 0, projectedProfit: 0 },
+  );
+
+  return {
+    activeCount: active.length,
+    arrivingWithinWindow: active.filter((conference) => dates.indexOf(conference.arrival) >= businessIndex).length,
+    projectedRevenue: totals.projectedRevenue,
+    projectedProfit: totals.projectedProfit,
+    openTasks: state.conferenceTasks.filter((task) => task.status !== "Done").length,
+  };
+}
+
 function formatChecklistDateLabel(date: string) {
   const [year, month, day] = date.split("-");
   return `${day}/${month}/${year.slice(2)}`;
@@ -1613,6 +2081,177 @@ function formatChecklistAsWhatsApp(checklist: HousekeepingChecklist) {
 
 function createSeedState(): DemoState {
   const rooms = createSeedRooms();
+
+  const clients: Client[] = [
+    {
+      id: "CLI-1",
+      organisation: "Harare School Camp",
+      contactPerson: "Sarah Davies",
+      phone: "+263 78 222 3344",
+      email: "bookings@harareschoolcamp.co.zw",
+      notes: "Annual winter camp, repeat client since 2023.",
+    },
+    {
+      id: "CLI-2",
+      organisation: "Zimbabwe Council of Churches",
+      contactPerson: "Rev. Farai Chikwanha",
+      phone: "+263 71 987 6543",
+      email: "events@zcc.org.zw",
+      notes: "First leadership training booking with Blue Hills.",
+    },
+  ];
+
+  const conferences: Conference[] = [
+    {
+      id: "CONF-1001",
+      conferenceNumber: "CNF-2026-01",
+      name: "Harare School Camp - Winter Retreat",
+      eventType: "School Camp",
+      clientId: "CLI-1",
+      contactPerson: "Sarah Davies",
+      phone: "+263 78 222 3344",
+      email: "bookings@harareschoolcamp.co.zw",
+      arrival: "Jul 02",
+      departure: "Jul 07",
+      guestCount: 28,
+      roomsRequired: 3,
+      conferenceHall: "Baobab Hall",
+      mealPackage: "Full Board",
+      activityPackage: "Team Building Package",
+      specialRequirements: "Vegetarian options for 4 guests.",
+      status: "In Progress",
+      quotation: {
+        accommodation: 1265,
+        conferenceHall: 450,
+        breakfast: 560,
+        lunch: 840,
+        dinner: 980,
+        teaBreaks: 280,
+        activities: 600,
+        transport: 150,
+        equipmentHire: 200,
+        otherServices: 100,
+        vatRate: 0.15,
+        depositRequired: 800,
+        expiryDate: "Jul 04",
+      },
+      budgetLines: [
+        { category: "Accommodation", budgeted: 150 },
+        { category: "Food", budgeted: 900 },
+        { category: "Beverages", budgeted: 150 },
+        { category: "Activities", budgeted: 300 },
+        { category: "Transport", budgeted: 100 },
+        { category: "Procurement", budgeted: 900 },
+        { category: "Staff", budgeted: 400 },
+        { category: "Cleaning", budgeted: 120 },
+        { category: "Utilities", budgeted: 180 },
+        { category: "Miscellaneous", budgeted: 100 },
+      ],
+      depositReceivedAmount: 800,
+      depositReceivedAt: "Jul 02",
+      createdAt: "2026-06-20",
+    },
+    {
+      id: "CONF-1002",
+      conferenceNumber: "CNF-2026-02",
+      name: "Zimbabwe Council of Churches - Leadership Training",
+      eventType: "Church Conference",
+      clientId: "CLI-2",
+      contactPerson: "Rev. Farai Chikwanha",
+      phone: "+263 71 987 6543",
+      email: "events@zcc.org.zw",
+      arrival: "Jul 05",
+      departure: "Jul 07",
+      guestCount: 40,
+      roomsRequired: 6,
+      conferenceHall: "Acacia Hall",
+      mealPackage: "Half Board",
+      status: "Confirmed",
+      quotation: {
+        accommodation: 2400,
+        conferenceHall: 600,
+        breakfast: 800,
+        lunch: 1200,
+        dinner: 1400,
+        teaBreaks: 400,
+        activities: 300,
+        transport: 250,
+        equipmentHire: 300,
+        otherServices: 150,
+        vatRate: 0.15,
+        depositRequired: 1200,
+        expiryDate: "Jul 04",
+      },
+      budgetLines: [
+        { category: "Accommodation", budgeted: 300 },
+        { category: "Food", budgeted: 1600 },
+        { category: "Beverages", budgeted: 250 },
+        { category: "Activities", budgeted: 300 },
+        { category: "Transport", budgeted: 200 },
+        { category: "Procurement", budgeted: 1400 },
+        { category: "Staff", budgeted: 600 },
+        { category: "Cleaning", budgeted: 200 },
+        { category: "Utilities", budgeted: 250 },
+        { category: "Miscellaneous", budgeted: 150 },
+      ],
+      createdAt: "2026-06-25",
+    },
+  ];
+
+  const conferenceTasks: ConferenceTask[] = [
+    {
+      id: "CTK-1",
+      conferenceId: "CONF-1001",
+      department: "Housekeeping",
+      description: "Prepare arrival rooms for Harare School Camp",
+      owner: "Memory",
+      dueDate: "Jul 02",
+      priority: "High",
+      status: "Done",
+      completedAt: "Jul 02",
+    },
+    {
+      id: "CTK-2",
+      conferenceId: "CONF-1001",
+      department: "Kitchen",
+      description: "Confirm Full Board menu for 28 guests",
+      owner: "Chef Tapiwa",
+      dueDate: "Jul 02",
+      priority: "High",
+      status: "Pending",
+    },
+    {
+      id: "CTK-3",
+      conferenceId: "CONF-1001",
+      department: "Maintenance",
+      description: "Inspect Baobab Hall projector and sound system",
+      owner: "Kudakwashe",
+      dueDate: "Jul 02",
+      priority: "Medium",
+      status: "In Progress",
+    },
+    {
+      id: "CTK-4",
+      conferenceId: "CONF-1002",
+      department: "Finance",
+      description: "Send deposit invoice to Zimbabwe Council of Churches",
+      owner: "Accounts",
+      dueDate: "Jul 04",
+      priority: "High",
+      status: "Pending",
+    },
+    {
+      id: "CTK-5",
+      conferenceId: "CONF-1002",
+      department: "Reception",
+      description: "Confirm room block with Front Office",
+      owner: "Memory",
+      dueDate: "Jul 04",
+      priority: "Medium",
+      status: "Pending",
+    },
+  ];
+
   return {
     rooms,
     reservations: [
@@ -1665,6 +2304,7 @@ function createSeedState(): DemoState {
         balance: 1260,
         purpose: "Conference Group",
         rate: 45,
+        conferenceId: "CONF-1001",
       },
     ],
     housekeeping: [
@@ -1705,6 +2345,23 @@ function createSeedState(): DemoState {
         ageVerified: true,
         placedAt: "09:05",
         settledAt: "09:05",
+      },
+      {
+        id: "KOT-223",
+        table: "Baobab Hall",
+        waiter: "Chef Tapiwa",
+        guest: "Harare School Camp",
+        items: [
+          { name: "Chicken Burger", price: 12, quantity: 28 },
+          { name: "Mazoe Orange", price: 3, quantity: 28 },
+        ],
+        total: 420,
+        payment: "Room Charge",
+        kitchenStatus: "Completed",
+        containsAlcohol: false,
+        ageVerified: true,
+        placedAt: "07:30",
+        conferenceId: "CONF-1001",
       },
     ],
     suppliers: [
@@ -1930,6 +2587,19 @@ function createSeedState(): DemoState {
         estimatedTotal: 67.5,
         status: "Converted to PO",
       },
+      {
+        id: "PR-410",
+        department: "Kitchen",
+        requestedBy: "Chef Tapiwa",
+        requestDate: "Jul 02",
+        priority: "High",
+        requiredDate: "Jul 02",
+        reason: "Auto-generated from CONF-1001 (Harare School Camp - Winter Retreat): 28 guests, 5 nights, Full Board.",
+        items: generateConferenceProcurementItems(conferences[0]),
+        estimatedTotal: generateConferenceProcurementItems(conferences[0]).reduce((sum, item) => sum + item.estimatedCost, 0),
+        status: "Pending Approval",
+        conferenceId: "CONF-1001",
+      },
     ],
     purchaseOrders: [
       {
@@ -1998,6 +2668,23 @@ function createSeedState(): DemoState {
         weightKg: 68,
         medicalClear: true,
         indemnitySigned: true,
+      },
+      {
+        id: "ACT-516",
+        activity: "Zipline",
+        guest: "Harare School Camp",
+        participants: 10,
+        date: "Jul 03",
+        time: "10:00",
+        instructor: "Chipo",
+        status: "Booked",
+        price: 150,
+        payment: "Room Charge",
+        ageConfirmed: true,
+        guardianPresent: true,
+        medicalClear: true,
+        indemnitySigned: true,
+        conferenceId: "CONF-1001",
       },
     ],
     activityChecklists: [
@@ -2221,6 +2908,9 @@ function createSeedState(): DemoState {
       { id: "A4", text: "Purchase request PR-318 awaiting manager approval", user: "Stores", time: "09:30" },
     ],
     housekeepingChecklists: [createSeedChecklist()],
+    clients,
+    conferences,
+    conferenceTasks,
   };
 }
 
@@ -2281,6 +2971,8 @@ function App() {
   const stockAlerts = useMemo(() => computeStockAlerts(getLatestChecklist(state.housekeepingChecklists)), [state.housekeepingChecklists]);
 
   const dashboardMetrics = useMemo(() => buildDashboardMetrics(state), [state]);
+  const conferenceAlerts = useMemo(() => computeConferenceAlerts(state), [state]);
+  const conferenceSummary = useMemo(() => computeConferenceDashboardSummary(state), [state]);
 
   const [reservationDrawer, setReservationDrawer] = useState<{ mode: "create" } | { mode: "edit"; id: string } | null>(null);
   const [reservationPrefill, setReservationPrefill] = useState<{ guest?: string; arrival?: string } | null>(null);
@@ -2606,6 +3298,7 @@ function App() {
       ageVerified: containsAlcohol ? values.ageVerified : true,
       placedAt: nowTime(),
       settledAt: values.payment === "Room Charge" ? undefined : nowTime(),
+      conferenceId: values.conferenceId,
     };
 
     withAudit(
@@ -3074,6 +3767,232 @@ function App() {
     );
   };
 
+  const createConference = (values: ConferenceFormValues) => {
+    let clientId = values.clientId;
+    let nextClients = state.clients;
+    if (!clientId) {
+      clientId = `CLI-${3 + state.clients.length + Math.floor(Math.random() * 90)}`;
+      nextClients = [
+        ...state.clients,
+        {
+          id: clientId,
+          organisation: values.newClientOrganisation,
+          contactPerson: values.contactPerson,
+          phone: values.phone,
+          email: values.email,
+        },
+      ];
+    }
+
+    const conferenceId = `CONF-${1003 + state.conferences.length + Math.floor(Math.random() * 90)}`;
+    const conferenceNumber = `CNF-2026-${String(state.conferences.length + 1).padStart(2, "0")}`;
+
+    const newConference: Conference = {
+      id: conferenceId,
+      conferenceNumber,
+      name: values.name,
+      eventType: values.eventType,
+      clientId,
+      contactPerson: values.contactPerson,
+      phone: values.phone,
+      email: values.email,
+      arrival: values.arrival,
+      departure: values.departure,
+      guestCount: values.guestCount,
+      roomsRequired: values.roomsRequired,
+      conferenceHall: values.conferenceHall,
+      mealPackage: values.mealPackage,
+      activityPackage: values.activityPackage || undefined,
+      specialRequirements: values.specialRequirements || undefined,
+      status: "Enquiry",
+      quotation: {
+        accommodation: values.accommodation,
+        conferenceHall: values.conferenceHallFee,
+        breakfast: values.breakfast,
+        lunch: values.lunch,
+        dinner: values.dinner,
+        teaBreaks: values.teaBreaks,
+        activities: values.activitiesFee,
+        transport: values.transport,
+        equipmentHire: values.equipmentHire,
+        otherServices: values.otherServices,
+        vatRate: values.vatRate,
+        depositRequired: values.depositRequired,
+        expiryDate: values.expiryDate,
+      },
+      budgetLines: CONFERENCE_BUDGET_CATEGORIES.map((category) => ({ category, budgeted: 0 })),
+      createdAt: todayIsoDate(),
+    };
+
+    withAudit(
+      { ...state, clients: nextClients, conferences: [newConference, ...state.conferences] },
+      `${conferenceId} created: ${values.name} (${values.guestCount} guests, ${values.eventType})`,
+      "Sales & Marketing",
+    );
+  };
+
+  const advanceConferenceStatus = (id: string) => {
+    const conference = state.conferences.find((item) => item.id === id);
+    if (!conference) return;
+    const currentIndex = CONFERENCE_STATUS_ORDER.indexOf(conference.status);
+    if (currentIndex === -1 || currentIndex === CONFERENCE_STATUS_ORDER.length - 1) return;
+    const nextStatus = CONFERENCE_STATUS_ORDER[currentIndex + 1];
+    if (nextStatus === "Planning" && computeConferenceDepositOutstanding(conference) > 0) return;
+    if (nextStatus === "Ready" && computeConferenceRoomsAllocated(state, conference.id) < conference.roomsRequired) return;
+
+    withAudit(
+      { ...state, conferences: state.conferences.map((item) => (item.id === id ? { ...item, status: nextStatus } : item)) },
+      `${conference.name} moved to ${nextStatus}`,
+      "Conference Coordinator",
+    );
+  };
+
+  const cancelConference = (id: string) => {
+    const conference = state.conferences.find((item) => item.id === id);
+    if (!conference) return;
+
+    withAudit(
+      { ...state, conferences: state.conferences.map((item) => (item.id === id ? { ...item, status: "Cancelled" } : item)) },
+      `${conference.name} cancelled`,
+      "Manager",
+    );
+  };
+
+  const recordConferenceDeposit = (id: string, amount: number) => {
+    const conference = state.conferences.find((item) => item.id === id);
+    if (!conference || amount <= 0) return;
+
+    withAudit(
+      {
+        ...state,
+        conferences: state.conferences.map((item) =>
+          item.id === id
+            ? { ...item, depositReceivedAmount: (item.depositReceivedAmount ?? 0) + amount, depositReceivedAt: businessDateLabel }
+            : item,
+        ),
+      },
+      `${money.format(amount)} deposit recorded for ${conference.name}`,
+      "Finance",
+    );
+  };
+
+  const allocateConferenceRoom = (id: string, roomNumber: string) => {
+    const conference = state.conferences.find((item) => item.id === id);
+    if (!conference) return;
+    const client = state.clients.find((item) => item.id === conference.clientId);
+    const nights = conferenceNights(conference);
+    const alreadyAllocated = computeConferenceRoomsAllocated(state, id);
+    const rate = Number((conference.quotation.accommodation / conference.roomsRequired / nights).toFixed(2));
+    const reservationId = `RSV-${1050 + state.reservations.length + Math.floor(Math.random() * 90)}`;
+    const newReservation: Reservation = {
+      id: reservationId,
+      guest: `${conference.name} - Room ${alreadyAllocated + 1}`,
+      organisation: client?.organisation ?? conference.name,
+      phone: conference.phone,
+      email: conference.email,
+      room: roomNumber,
+      arrival: conference.arrival,
+      departure: conference.departure,
+      guests: Math.max(1, Math.ceil(conference.guestCount / conference.roomsRequired)),
+      status: "Confirmed",
+      payment: "Outstanding",
+      balance: Number((rate * nights).toFixed(2)),
+      purpose: "Conference Group",
+      rate,
+      conferenceId: conference.id,
+    };
+
+    withAudit(
+      { ...state, reservations: [...state.reservations, newReservation] },
+      `${roomNumber} allocated to ${conference.name} (${reservationId})`,
+      "Reception",
+    );
+  };
+
+  const generateConferenceProcurement = (id: string) => {
+    const conference = state.conferences.find((item) => item.id === id);
+    if (!conference) return;
+    const items = generateConferenceProcurementItems(conference);
+    const estimatedTotal = Number(items.reduce((sum, item) => sum + item.estimatedCost, 0).toFixed(2));
+    const requestId = `PR-${430 + state.purchaseRequests.length + Math.floor(Math.random() * 90)}`;
+    const newRequest: PurchaseRequest = {
+      id: requestId,
+      department: "Kitchen",
+      requestedBy: "Conference Coordinator",
+      requestDate: businessDateLabel,
+      priority: "High",
+      requiredDate: conference.arrival,
+      reason: `Auto-generated procurement for ${conference.name} (${conference.guestCount} guests, ${conferenceNights(conference)} nights, ${conference.mealPackage}).`,
+      items,
+      estimatedTotal,
+      status: "Pending Approval",
+      conferenceId: conference.id,
+    };
+
+    const currentIndex = CONFERENCE_STATUS_ORDER.indexOf(conference.status);
+    const procurementIndex = CONFERENCE_STATUS_ORDER.indexOf("Procurement");
+    const nextConferenceStatus = currentIndex !== -1 && currentIndex < procurementIndex ? "Procurement" : conference.status;
+
+    withAudit(
+      {
+        ...state,
+        purchaseRequests: [newRequest, ...state.purchaseRequests],
+        conferences: state.conferences.map((item) => (item.id === id ? { ...item, status: nextConferenceStatus } : item)),
+      },
+      `${requestId} auto-generated for ${conference.name}: ${money.format(estimatedTotal)} estimated`,
+      "Conference Coordinator",
+    );
+  };
+
+  const updateConferenceBudget = (conferenceId: string, budgetLines: ConferenceBudgetLine[]) => {
+    const conference = state.conferences.find((item) => item.id === conferenceId);
+    if (!conference) return;
+
+    withAudit(
+      { ...state, conferences: state.conferences.map((item) => (item.id === conferenceId ? { ...item, budgetLines } : item)) },
+      `Budget updated for ${conference.name}`,
+      "Manager",
+    );
+  };
+
+  const addConferenceTask = (conferenceId: string, values: ConferenceTaskFormValues) => {
+    const conference = state.conferences.find((item) => item.id === conferenceId);
+    if (!conference) return;
+    const taskId = `CTK-${6 + state.conferenceTasks.length + Math.floor(Math.random() * 90)}`;
+    const newTask: ConferenceTask = {
+      id: taskId,
+      conferenceId,
+      department: values.department,
+      description: values.description,
+      owner: values.owner,
+      dueDate: values.dueDate,
+      priority: values.priority,
+      status: "Pending",
+    };
+
+    withAudit(
+      { ...state, conferenceTasks: [newTask, ...state.conferenceTasks] },
+      `${taskId} added for ${conference.name}: ${values.description}`,
+      values.owner,
+    );
+  };
+
+  const completeConferenceTask = (id: string) => {
+    const task = state.conferenceTasks.find((item) => item.id === id);
+    if (!task) return;
+
+    withAudit(
+      {
+        ...state,
+        conferenceTasks: state.conferenceTasks.map((item) =>
+          item.id === id ? { ...item, status: "Done", completedAt: businessDateLabel } : item,
+        ),
+      },
+      `Conference task completed: ${task.description}`,
+      task.owner,
+    );
+  };
+
   const advanceComplaint = (id: string) => {
     const complaint = state.complaints.find((item) => item.id === id);
     if (!complaint) return;
@@ -3114,6 +4033,7 @@ function App() {
       medicalClear: values.medicalClear,
       indemnitySigned: values.indemnitySigned,
       notes: values.notes || undefined,
+      conferenceId: values.conferenceId,
     };
 
     withAudit(
@@ -3426,7 +4346,15 @@ function App() {
         </header>
 
         {activeModule === "dashboard" && (
-          <Dashboard state={state} totals={totals} stockAlerts={stockAlerts} metrics={dashboardMetrics} financeAlerts={financeAlerts} />
+          <Dashboard
+            state={state}
+            totals={totals}
+            stockAlerts={stockAlerts}
+            metrics={dashboardMetrics}
+            financeAlerts={financeAlerts}
+            conferenceAlerts={conferenceAlerts}
+            conferenceSummary={conferenceSummary}
+          />
         )}
         {activeModule === "frontOffice" && (
           <FrontOffice
@@ -3505,6 +4433,20 @@ function App() {
             onOpenReceivePayment={() => setReceivePaymentModalOpen(true)}
           />
         )}
+        {activeModule === "conference" && (
+          <Conference
+            state={state}
+            onCreateConference={createConference}
+            onAdvanceStatus={advanceConferenceStatus}
+            onCancelConference={cancelConference}
+            onRecordDeposit={recordConferenceDeposit}
+            onAllocateRoom={allocateConferenceRoom}
+            onGenerateProcurement={generateConferenceProcurement}
+            onUpdateBudget={updateConferenceBudget}
+            onAddTask={addConferenceTask}
+            onCompleteTask={completeConferenceTask}
+          />
+        )}
       </main>
 
       {reservationDrawer && (
@@ -3560,7 +4502,7 @@ function App() {
       {checklistDetail && <HousekeepingChecklistDetailModal checklist={checklistDetail} onClose={() => setChecklistDetail(null)} />}
 
       {activityBookingDrawerOpen && (
-        <ActivityBookingDrawer onClose={() => setActivityBookingDrawerOpen(false)} onSave={saveActivityBooking} />
+        <ActivityBookingDrawer conferences={state.conferences} onClose={() => setActivityBookingDrawerOpen(false)} onSave={saveActivityBooking} />
       )}
 
       {activityChecklistDrawerOpen && (
@@ -3572,7 +4514,12 @@ function App() {
       )}
 
       {orderDrawer && (
-        <OrderDrawer initialItem={orderDrawer.initialItem} onClose={() => setOrderDrawer(null)} onSave={createOrder} />
+        <OrderDrawer
+          initialItem={orderDrawer.initialItem}
+          conferences={state.conferences}
+          onClose={() => setOrderDrawer(null)}
+          onSave={createOrder}
+        />
       )}
 
       {kitchenChecklistDrawerOpen && (
@@ -3788,20 +4735,95 @@ function buildManagerPackHtml(
 </html>`;
 }
 
+function buildConferenceQuotationHtml(state: DemoState, conference: Conference): string {
+  const client = state.clients.find((item) => item.id === conference.clientId);
+  const quotation = computeConferenceQuotationTotal(conference.quotation);
+  const nights = conferenceNights(conference);
+
+  const lineRows: Array<[string, number]> = [
+    ["Accommodation", conference.quotation.accommodation],
+    ["Conference Hall", conference.quotation.conferenceHall],
+    ["Breakfast", conference.quotation.breakfast],
+    ["Lunch", conference.quotation.lunch],
+    ["Dinner", conference.quotation.dinner],
+    ["Tea Breaks", conference.quotation.teaBreaks],
+    ["Activities", conference.quotation.activities],
+    ["Transport", conference.quotation.transport],
+    ["Equipment Hire", conference.quotation.equipmentHire],
+    ["Other Services", conference.quotation.otherServices],
+  ];
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>${escapeHtml(conference.conferenceNumber)} - Quotation</title>
+<style>
+  body { font-family: Inter, Arial, sans-serif; color: #142033; margin: 32px; }
+  h1 { color: #0f4c81; margin-bottom: 4px; }
+  h2 { color: #0f4c81; border-bottom: 2px solid #c9a227; padding-bottom: 4px; margin-top: 32px; }
+  .eyebrow { color: #c9a227; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; font-size: 13px; }
+  .subtitle { color: #667085; margin-top: 0; }
+  table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+  th, td { border-bottom: 1px solid #e5ebf2; padding: 8px 10px; text-align: left; font-size: 14px; }
+  th { background: #f8fafc; color: #536071; text-transform: uppercase; font-size: 12px; }
+  td.number { text-align: right; }
+  tr.total td { font-weight: 800; border-top: 2px solid #142033; }
+  @media print { body { margin: 12px; } }
+</style>
+</head>
+<body>
+  <div class="eyebrow">Blue Hills Camp</div>
+  <h1>Conference Quotation</h1>
+  <p class="subtitle">${escapeHtml(conference.conferenceNumber)} - ${escapeHtml(conference.name)} - generated ${nowTime()}</p>
+
+  <h2>Conference Information</h2>
+  <table>
+    <tbody>
+      <tr><td>Client</td><td>${escapeHtml(client?.organisation ?? "Unknown")}</td></tr>
+      <tr><td>Contact</td><td>${escapeHtml(conference.contactPerson)} - ${escapeHtml(conference.phone)}</td></tr>
+      <tr><td>Event Type</td><td>${escapeHtml(conference.eventType)}</td></tr>
+      <tr><td>Dates</td><td>${escapeHtml(conference.arrival)} to ${escapeHtml(conference.departure)} (${nights} night${nights === 1 ? "" : "s"})</td></tr>
+      <tr><td>Guests</td><td>${conference.guestCount}</td></tr>
+      <tr><td>Conference Hall</td><td>${escapeHtml(conference.conferenceHall)}</td></tr>
+      <tr><td>Meal Package</td><td>${escapeHtml(conference.mealPackage)}</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Quotation</h2>
+  <table>
+    <thead><tr><th>Item</th><th class="number">Amount</th></tr></thead>
+    <tbody>
+      ${lineRows.map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td class="number">${escapeHtml(money.format(value))}</td></tr>`).join("\n      ")}
+      <tr><td>Subtotal</td><td class="number">${escapeHtml(money.format(quotation.subtotal))}</td></tr>
+      <tr><td>VAT (${(conference.quotation.vatRate * 100).toFixed(0)}%)</td><td class="number">${escapeHtml(money.format(quotation.vat))}</td></tr>
+      <tr class="total"><td>Total</td><td class="number">${escapeHtml(money.format(quotation.total))}</td></tr>
+      <tr><td>Deposit Required</td><td class="number">${escapeHtml(money.format(conference.quotation.depositRequired))}</td></tr>
+      <tr><td>Quotation Expiry</td><td class="number">${escapeHtml(conference.quotation.expiryDate)}</td></tr>
+    </tbody>
+  </table>
+</body>
+</html>`;
+}
+
 function Dashboard({
   state,
   totals,
   stockAlerts,
   metrics,
   financeAlerts,
+  conferenceAlerts,
+  conferenceSummary,
 }: {
   state: DemoState;
   totals: { occupancy: number; arrivals: number; revenue: number; outstanding: number };
   stockAlerts: StockAlert[];
   metrics: DashboardMetrics;
   financeAlerts: FinanceAlert[];
+  conferenceAlerts: ConferenceAlert[];
+  conferenceSummary: ConferenceDashboardSummary;
 }) {
-  const attentionItems: Array<{ key: string; icon: LucideIcon; title: string; description: string }> = [...financeAlerts];
+  const attentionItems: Array<{ key: string; icon: LucideIcon; title: string; description: string }> = [...financeAlerts, ...conferenceAlerts];
 
   if (metrics.pendingPurchases > 0) {
     const pending = state.purchaseRequests.find((request) => request.status === "Pending Approval");
@@ -4072,6 +5094,14 @@ function Dashboard({
           icon={metrics.businessDayClosed ? Lock : Landmark}
           trend={metrics.unresolvedCashVariances > 0 ? `${metrics.unresolvedCashVariances} cash variance(s) unresolved` : "All registers reconciled"}
           tone={metrics.unresolvedCashVariances > 0 ? "danger" : metrics.businessDayClosed ? "success" : undefined}
+        />
+        <KpiCard
+          label="Conferences & Events"
+          value={conferenceSummary.activeCount.toString()}
+          helper={`${money.format(conferenceSummary.projectedRevenue)} projected revenue, ${money.format(conferenceSummary.projectedProfit)} projected profit`}
+          icon={CalendarRange}
+          trend={`${conferenceSummary.openTasks} open task${conferenceSummary.openTasks === 1 ? "" : "s"}`}
+          tone={conferenceAlerts.length > 0 ? "warning" : undefined}
         />
       </div>
 
@@ -6198,6 +7228,970 @@ function NightAuditWizard({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Conference & Events: the flagship cross-department module. See
+// CONFERENCE_BOOKING.md - a conference coordinates accommodation, catering,
+// activities, procurement and finance from one screen, not a reservation.
+// ---------------------------------------------------------------------------
+
+function Conference({
+  state,
+  onCreateConference,
+  onAdvanceStatus,
+  onCancelConference,
+  onRecordDeposit,
+  onAllocateRoom,
+  onGenerateProcurement,
+  onUpdateBudget,
+  onAddTask,
+  onCompleteTask,
+}: {
+  state: DemoState;
+  onCreateConference: (values: ConferenceFormValues) => void;
+  onAdvanceStatus: (id: string) => void;
+  onCancelConference: (id: string) => void;
+  onRecordDeposit: (id: string, amount: number) => void;
+  onAllocateRoom: (id: string, roomNumber: string) => void;
+  onGenerateProcurement: (id: string) => void;
+  onUpdateBudget: (conferenceId: string, budgetLines: ConferenceBudgetLine[]) => void;
+  onAddTask: (conferenceId: string, values: ConferenceTaskFormValues) => void;
+  onCompleteTask: (id: string) => void;
+}) {
+  const [createOpen, setCreateOpen] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(null);
+
+  const summary = computeConferenceDashboardSummary(state);
+  const alerts = computeConferenceAlerts(state);
+  const detailConference = state.conferences.find((conference) => conference.id === detailId) ?? null;
+  const clientName = (clientId: string) => state.clients.find((client) => client.id === clientId)?.organisation ?? "Unknown client";
+  const openTasks = state.conferenceTasks.filter((task) => task.status !== "Done");
+
+  return (
+    <Page
+      title="Conferences & Events"
+      description="Every conference is a cross-department project - accommodation, catering, activities, procurement and finance in one view."
+      action="New Conference"
+      onAction={() => setCreateOpen(true)}
+      icon={CalendarRange}
+    >
+      <div className="kpi-grid">
+        <KpiCard
+          label="Active Conferences"
+          value={summary.activeCount.toString()}
+          helper={`${summary.arrivingWithinWindow} arriving from ${businessDateLabel}`}
+          icon={CalendarRange}
+        />
+        <KpiCard
+          label="Projected Revenue"
+          value={money.format(summary.projectedRevenue)}
+          helper="Quotation totals across active conferences"
+          icon={Receipt}
+        />
+        <KpiCard
+          label="Projected Profit"
+          value={money.format(summary.projectedProfit)}
+          helper="Quotation total less budgeted cost"
+          icon={TrendingUp}
+          tone={summary.projectedProfit < 0 ? "danger" : undefined}
+        />
+        <KpiCard
+          label="Open Tasks"
+          value={openTasks.length.toString()}
+          helper="Across every conference task board"
+          icon={ListChecks}
+          tone={alerts.some((alert) => alert.key === "conference-tasks-due") ? "warning" : undefined}
+        />
+      </div>
+
+      <section className="panel wide">
+        <PanelHeader title="Conference Dashboard" subtitle="Status, accommodation, budget and deposit position for every conference." />
+        <table>
+          <thead>
+            <tr>
+              <th>Conference</th>
+              <th>Client</th>
+              <th>Event Type</th>
+              <th>Status</th>
+              <th>Dates</th>
+              <th>Guests</th>
+              <th>Rooms</th>
+              <th>Projected Profit</th>
+              <th>Deposit</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.conferences.length === 0 && (
+              <tr>
+                <td colSpan={10}>
+                  <p className="muted">No conferences yet.</p>
+                </td>
+              </tr>
+            )}
+            {state.conferences.map((conference) => {
+              const budget = computeConferenceBudgetTotals(conference);
+              const roomsAllocated = computeConferenceRoomsAllocated(state, conference.id);
+              const depositOutstanding = computeConferenceDepositOutstanding(conference);
+              return (
+                <tr key={conference.id}>
+                  <td>
+                    <strong>{conference.name}</strong>
+                    <br />
+                    <span className="muted">{conference.conferenceNumber}</span>
+                  </td>
+                  <td>{clientName(conference.clientId)}</td>
+                  <td>{conference.eventType}</td>
+                  <td>
+                    <Badge label={conference.status} />
+                  </td>
+                  <td>
+                    {conference.arrival} - {conference.departure}
+                  </td>
+                  <td>{conference.guestCount}</td>
+                  <td className={roomsAllocated < conference.roomsRequired ? "stock-low-cell" : ""}>
+                    {roomsAllocated}/{conference.roomsRequired}
+                  </td>
+                  <td>{money.format(budget.projectedProfit)}</td>
+                  <td>{depositOutstanding > 0 ? `${money.format(depositOutstanding)} due` : "Paid"}</td>
+                  <td className="actions-cell">
+                    <button className="secondary-button" onClick={() => setDetailId(conference.id)} type="button">
+                      View
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="panel wide">
+        <PanelHeader title="Cross-Department Task Board" subtitle="Every departmental task across every conference, in one place." />
+        <table>
+          <thead>
+            <tr>
+              <th>Conference</th>
+              <th>Department</th>
+              <th>Task</th>
+              <th>Owner</th>
+              <th>Due</th>
+              <th>Priority</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.conferenceTasks.length === 0 && (
+              <tr>
+                <td colSpan={8}>
+                  <p className="muted">No conference tasks yet.</p>
+                </td>
+              </tr>
+            )}
+            {state.conferenceTasks.map((task) => {
+              const conference = state.conferences.find((item) => item.id === task.conferenceId);
+              return (
+                <tr key={task.id}>
+                  <td>{conference?.name ?? task.conferenceId}</td>
+                  <td>{task.department}</td>
+                  <td>{task.description}</td>
+                  <td>{task.owner}</td>
+                  <td>{task.dueDate}</td>
+                  <td>
+                    <Badge label={task.priority} />
+                  </td>
+                  <td>
+                    <Badge label={task.status} />
+                  </td>
+                  <td className="actions-cell">
+                    {task.status !== "Done" && (
+                      <button className="secondary-button" onClick={() => onCompleteTask(task.id)} type="button">
+                        Mark Done
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+
+      {createOpen && (
+        <ConferenceDrawer
+          clients={state.clients}
+          onClose={() => setCreateOpen(false)}
+          onSave={(values) => {
+            onCreateConference(values);
+            setCreateOpen(false);
+          }}
+        />
+      )}
+
+      {detailConference && (
+        <ConferenceDetailDrawer
+          state={state}
+          conference={detailConference}
+          onClose={() => setDetailId(null)}
+          onAdvanceStatus={onAdvanceStatus}
+          onCancelConference={onCancelConference}
+          onRecordDeposit={onRecordDeposit}
+          onAllocateRoom={onAllocateRoom}
+          onGenerateProcurement={onGenerateProcurement}
+          onUpdateBudget={onUpdateBudget}
+          onAddTask={onAddTask}
+          onCompleteTask={onCompleteTask}
+        />
+      )}
+    </Page>
+  );
+}
+
+function ConferenceDrawer({
+  clients,
+  onClose,
+  onSave,
+}: {
+  clients: Client[];
+  onClose: () => void;
+  onSave: (values: ConferenceFormValues) => void;
+}) {
+  const [name, setName] = useState("");
+  const [eventType, setEventType] = useState<ConferenceEventType>("Corporate Conference");
+  const [clientId, setClientId] = useState("");
+  const [newClientOrganisation, setNewClientOrganisation] = useState("");
+  const [contactPerson, setContactPerson] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [arrival, setArrival] = useState(dates[0]);
+  const [departure, setDeparture] = useState(dates[1]);
+  const [guestCount, setGuestCount] = useState(20);
+  const [roomsRequired, setRoomsRequired] = useState(2);
+  const [conferenceHall, setConferenceHall] = useState("Baobab Hall");
+  const [mealPackage, setMealPackage] = useState<MealPackage>("Full Board");
+  const [activityPackage, setActivityPackage] = useState("");
+  const [specialRequirements, setSpecialRequirements] = useState("");
+  const [accommodation, setAccommodation] = useState(0);
+  const [conferenceHallFee, setConferenceHallFee] = useState(0);
+  const [breakfast, setBreakfast] = useState(0);
+  const [lunch, setLunch] = useState(0);
+  const [dinner, setDinner] = useState(0);
+  const [teaBreaks, setTeaBreaks] = useState(0);
+  const [activitiesFee, setActivitiesFee] = useState(0);
+  const [transport, setTransport] = useState(0);
+  const [equipmentHire, setEquipmentHire] = useState(0);
+  const [otherServices, setOtherServices] = useState(0);
+  const [vatRate, setVatRate] = useState(0.15);
+  const [depositRequired, setDepositRequired] = useState(0);
+  const [expiryDate, setExpiryDate] = useState(dates[1]);
+
+  const selectClient = (id: string) => {
+    setClientId(id);
+    const client = clients.find((item) => item.id === id);
+    if (client) {
+      setContactPerson(client.contactPerson);
+      setPhone(client.phone);
+      setEmail(client.email);
+    }
+  };
+
+  const subtotal =
+    accommodation + conferenceHallFee + breakfast + lunch + dinner + teaBreaks + activitiesFee + transport + equipmentHire + otherServices;
+  const vat = subtotal * vatRate;
+  const total = subtotal + vat;
+
+  const canSave = Boolean(
+    name &&
+      contactPerson &&
+      phone &&
+      (clientId || newClientOrganisation) &&
+      guestCount > 0 &&
+      roomsRequired > 0 &&
+      dates.indexOf(departure) > dates.indexOf(arrival),
+  );
+
+  return (
+    <Drawer title="New Conference" description="Capture the enquiry, client and quotation to start a conference project." onClose={onClose}>
+      <div className="form-section">
+        <h3>Conference Information</h3>
+        <div className="form-grid">
+          <Field label="Conference Name">
+            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Harare School Camp - Winter Retreat" />
+          </Field>
+          <Field label="Event Type">
+            <select value={eventType} onChange={(event) => setEventType(event.target.value as ConferenceEventType)}>
+              {CONFERENCE_EVENT_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Arrival Date">
+            <select value={arrival} onChange={(event) => setArrival(event.target.value)}>
+              {dates.map((date) => (
+                <option key={date} value={date}>
+                  {date}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Departure Date">
+            <select value={departure} onChange={(event) => setDeparture(event.target.value)}>
+              {dates.map((date) => (
+                <option key={date} value={date}>
+                  {date}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Number of Guests">
+            <input type="number" min={1} value={guestCount} onChange={(event) => setGuestCount(Number(event.target.value))} />
+          </Field>
+          <Field label="Rooms Required">
+            <input type="number" min={1} value={roomsRequired} onChange={(event) => setRoomsRequired(Number(event.target.value))} />
+          </Field>
+          <Field label="Conference Hall">
+            <input value={conferenceHall} onChange={(event) => setConferenceHall(event.target.value)} placeholder="e.g. Baobab Hall" />
+          </Field>
+          <Field label="Meal Package">
+            <select value={mealPackage} onChange={(event) => setMealPackage(event.target.value as MealPackage)}>
+              <option value="Full Board">Full Board</option>
+              <option value="Half Board">Half Board</option>
+              <option value="Day Package">Day Package</option>
+              <option value="Custom">Custom</option>
+            </select>
+          </Field>
+          <Field label="Activity Package (optional)">
+            <input value={activityPackage} onChange={(event) => setActivityPackage(event.target.value)} placeholder="e.g. Team Building Package" />
+          </Field>
+        </div>
+        <Field label="Special Requirements (optional)">
+          <textarea value={specialRequirements} onChange={(event) => setSpecialRequirements(event.target.value)} rows={2} />
+        </Field>
+      </div>
+
+      <div className="form-section">
+        <h3>Client</h3>
+        <div className="form-grid">
+          <Field label="Existing Client">
+            <select value={clientId} onChange={(event) => selectClient(event.target.value)}>
+              <option value="">New client</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.organisation}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {!clientId && (
+            <Field label="Organisation">
+              <input
+                value={newClientOrganisation}
+                onChange={(event) => setNewClientOrganisation(event.target.value)}
+                placeholder="e.g. Zimbabwe Council of Churches"
+              />
+            </Field>
+          )}
+          <Field label="Contact Person">
+            <input value={contactPerson} onChange={(event) => setContactPerson(event.target.value)} placeholder="e.g. Rev. Farai Chikwanha" />
+          </Field>
+          <Field label="Phone">
+            <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+263 7..." />
+          </Field>
+          <Field label="Email">
+            <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Optional" />
+          </Field>
+        </div>
+      </div>
+
+      <div className="form-section">
+        <h3>Quotation</h3>
+        <div className="form-grid">
+          <Field label="Accommodation (USD)">
+            <input type="number" min={0} value={accommodation} onChange={(event) => setAccommodation(Number(event.target.value))} />
+          </Field>
+          <Field label="Conference Hall (USD)">
+            <input type="number" min={0} value={conferenceHallFee} onChange={(event) => setConferenceHallFee(Number(event.target.value))} />
+          </Field>
+          <Field label="Breakfast (USD)">
+            <input type="number" min={0} value={breakfast} onChange={(event) => setBreakfast(Number(event.target.value))} />
+          </Field>
+          <Field label="Lunch (USD)">
+            <input type="number" min={0} value={lunch} onChange={(event) => setLunch(Number(event.target.value))} />
+          </Field>
+          <Field label="Dinner (USD)">
+            <input type="number" min={0} value={dinner} onChange={(event) => setDinner(Number(event.target.value))} />
+          </Field>
+          <Field label="Tea Breaks (USD)">
+            <input type="number" min={0} value={teaBreaks} onChange={(event) => setTeaBreaks(Number(event.target.value))} />
+          </Field>
+          <Field label="Activities (USD)">
+            <input type="number" min={0} value={activitiesFee} onChange={(event) => setActivitiesFee(Number(event.target.value))} />
+          </Field>
+          <Field label="Transport (USD)">
+            <input type="number" min={0} value={transport} onChange={(event) => setTransport(Number(event.target.value))} />
+          </Field>
+          <Field label="Equipment Hire (USD)">
+            <input type="number" min={0} value={equipmentHire} onChange={(event) => setEquipmentHire(Number(event.target.value))} />
+          </Field>
+          <Field label="Other Services (USD)">
+            <input type="number" min={0} value={otherServices} onChange={(event) => setOtherServices(Number(event.target.value))} />
+          </Field>
+          <Field label="VAT Rate">
+            <input type="number" min={0} max={1} step={0.01} value={vatRate} onChange={(event) => setVatRate(Number(event.target.value))} />
+          </Field>
+          <Field label="Deposit Required (USD)">
+            <input type="number" min={0} value={depositRequired} onChange={(event) => setDepositRequired(Number(event.target.value))} />
+          </Field>
+          <Field label="Quotation Expiry">
+            <select value={expiryDate} onChange={(event) => setExpiryDate(event.target.value)}>
+              {dates.map((date) => (
+                <option key={date} value={date}>
+                  {date}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        <div className="folio-line">
+          <span>Subtotal</span>
+          <strong>{money.format(subtotal)}</strong>
+        </div>
+        <div className="folio-line">
+          <span>VAT</span>
+          <strong>{money.format(vat)}</strong>
+        </div>
+        <div className="folio-line total">
+          <span>Quotation Total</span>
+          <strong>{money.format(total)}</strong>
+        </div>
+      </div>
+
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button
+          className="primary-button"
+          disabled={!canSave}
+          onClick={() =>
+            onSave({
+              name,
+              eventType,
+              clientId,
+              newClientOrganisation,
+              contactPerson,
+              phone,
+              email,
+              arrival,
+              departure,
+              guestCount,
+              roomsRequired,
+              conferenceHall,
+              mealPackage,
+              activityPackage,
+              specialRequirements,
+              accommodation,
+              conferenceHallFee,
+              breakfast,
+              lunch,
+              dinner,
+              teaBreaks,
+              activitiesFee,
+              transport,
+              equipmentHire,
+              otherServices,
+              vatRate,
+              depositRequired,
+              expiryDate,
+            })
+          }
+          type="button"
+        >
+          Create Conference
+        </button>
+      </div>
+    </Drawer>
+  );
+}
+
+function ConferenceDetailDrawer({
+  state,
+  conference,
+  onClose,
+  onAdvanceStatus,
+  onCancelConference,
+  onRecordDeposit,
+  onAllocateRoom,
+  onGenerateProcurement,
+  onUpdateBudget,
+  onAddTask,
+  onCompleteTask,
+}: {
+  state: DemoState;
+  conference: Conference;
+  onClose: () => void;
+  onAdvanceStatus: (id: string) => void;
+  onCancelConference: (id: string) => void;
+  onRecordDeposit: (id: string, amount: number) => void;
+  onAllocateRoom: (id: string, roomNumber: string) => void;
+  onGenerateProcurement: (id: string) => void;
+  onUpdateBudget: (conferenceId: string, budgetLines: ConferenceBudgetLine[]) => void;
+  onAddTask: (conferenceId: string, values: ConferenceTaskFormValues) => void;
+  onCompleteTask: (id: string) => void;
+}) {
+  const client = state.clients.find((item) => item.id === conference.clientId);
+  const nights = conferenceNights(conference);
+  const budgetTotals = computeConferenceBudgetTotals(conference);
+  const financials = computeConferenceFinancials(state, conference);
+  const roomsAllocated = computeConferenceRoomsAllocated(state, conference.id);
+  const depositOutstanding = computeConferenceDepositOutstanding(conference);
+
+  const linkedReservations = state.reservations.filter(
+    (reservation) => reservation.conferenceId === conference.id && reservation.status !== "Cancelled",
+  );
+  const linkedRequests = state.purchaseRequests.filter((request) => request.conferenceId === conference.id);
+  const linkedOrders = state.orders.filter((order) => order.conferenceId === conference.id);
+  const linkedActivities = state.activities.filter((booking) => booking.conferenceId === conference.id);
+  const tasks = state.conferenceTasks.filter((task) => task.conferenceId === conference.id);
+
+  const allocatedRoomNumbers = new Set(linkedReservations.map((reservation) => reservation.room));
+  const availableRooms = state.rooms.filter((room) => room.status === "Available" && !allocatedRoomNumbers.has(room.number));
+  const [roomChoice, setRoomChoice] = useState(availableRooms[0]?.number ?? "");
+  const [depositAmount, setDepositAmount] = useState(depositOutstanding > 0 ? depositOutstanding : 0);
+
+  const [budgetDraft, setBudgetDraft] = useState<Record<ConferenceBudgetCategory, number>>(() => {
+    const draft = {} as Record<ConferenceBudgetCategory, number>;
+    CONFERENCE_BUDGET_CATEGORIES.forEach((category) => {
+      draft[category] = conference.budgetLines.find((line) => line.category === category)?.budgeted ?? 0;
+    });
+    return draft;
+  });
+  const budgetDirty = CONFERENCE_BUDGET_CATEGORIES.some(
+    (category) => budgetDraft[category] !== (conference.budgetLines.find((line) => line.category === category)?.budgeted ?? 0),
+  );
+
+  const [taskDepartment, setTaskDepartment] = useState<ConferenceDepartment>("Reception");
+  const [taskDescription, setTaskDescription] = useState("");
+  const [taskOwner, setTaskOwner] = useState("");
+  const [taskDueDate, setTaskDueDate] = useState(conference.arrival);
+  const [taskPriority, setTaskPriority] = useState<ConferenceTaskPriority>("Medium");
+
+  const currentIndex = CONFERENCE_STATUS_ORDER.indexOf(conference.status);
+  const nextStatus = currentIndex >= 0 && currentIndex < CONFERENCE_STATUS_ORDER.length - 1 ? CONFERENCE_STATUS_ORDER[currentIndex + 1] : null;
+  const canCancel = conference.status !== "Cancelled" && conference.status !== "Completed";
+  const blockedReason =
+    nextStatus === "Planning" && depositOutstanding > 0
+      ? "Deposit must be recorded before planning can start."
+      : nextStatus === "Ready" && roomsAllocated < conference.roomsRequired
+        ? "All rooms must be allocated before the conference is marked Ready."
+        : null;
+
+  const printQuotation = () => downloadHtmlFile(`${conference.conferenceNumber}-quotation.html`, buildConferenceQuotationHtml(state, conference));
+
+  return (
+    <Drawer
+      title={`${conference.conferenceNumber} - ${conference.name}`}
+      description={`${conference.eventType} for ${client?.organisation ?? "Unknown client"} - ${conference.arrival} to ${conference.departure} (${nights} night${nights === 1 ? "" : "s"}), ${conference.guestCount} guests.`}
+      onClose={onClose}
+    >
+      <div className="form-section">
+        <h3>Status</h3>
+        <div className="folio-line">
+          <span>Current Status</span>
+          <Badge label={conference.status} />
+        </div>
+        <div className="sheet-footer">
+          {nextStatus && (
+            <button className="primary-button" disabled={Boolean(blockedReason)} onClick={() => onAdvanceStatus(conference.id)} type="button">
+              Advance to {nextStatus}
+            </button>
+          )}
+          {canCancel && (
+            <button className="ghost-button" onClick={() => onCancelConference(conference.id)} type="button">
+              Cancel Conference
+            </button>
+          )}
+          <button className="secondary-button" onClick={printQuotation} type="button">
+            <Printer size={16} />
+            Print Quotation
+          </button>
+        </div>
+        {blockedReason && <p className="muted">{blockedReason}</p>}
+      </div>
+
+      <div className="form-section">
+        <h3>Client</h3>
+        <div className="form-grid">
+          <Field label="Organisation">
+            <input disabled value={client?.organisation ?? "Unknown"} />
+          </Field>
+          <Field label="Contact Person">
+            <input disabled value={conference.contactPerson} />
+          </Field>
+          <Field label="Phone">
+            <input disabled value={conference.phone} />
+          </Field>
+          <Field label="Email">
+            <input disabled value={conference.email} />
+          </Field>
+        </div>
+      </div>
+
+      <div className="form-section">
+        <h3>Accommodation Planning</h3>
+        <div className="folio-line">
+          <span>Rooms Allocated</span>
+          <strong className={roomsAllocated < conference.roomsRequired ? "stock-low-cell" : ""}>
+            {roomsAllocated} / {conference.roomsRequired}
+          </strong>
+        </div>
+        {linkedReservations.length > 0 && (
+          <div className="table-scroll">
+            <table className="stock-table dashboard-table">
+              <thead>
+                <tr>
+                  <th>Reservation</th>
+                  <th>Room</th>
+                  <th>Rate/Night</th>
+                  <th>Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {linkedReservations.map((reservation) => (
+                  <tr key={reservation.id}>
+                    <td>{reservation.id}</td>
+                    <td>{reservation.room}</td>
+                    <td>{money.format(reservation.rate ?? 0)}</td>
+                    <td>{money.format(reservation.balance)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {roomsAllocated < conference.roomsRequired &&
+          (availableRooms.length > 0 ? (
+            <div className="form-grid">
+              <Field label="Allocate Room">
+                <select value={roomChoice} onChange={(event) => setRoomChoice(event.target.value)}>
+                  {availableRooms.map((room) => (
+                    <option key={room.id} value={room.number}>
+                      {room.number} - {room.type}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <button className="secondary-button" onClick={() => onAllocateRoom(conference.id, roomChoice)} type="button">
+                <Plus size={16} />
+                Allocate Room
+              </button>
+            </div>
+          ) : (
+            <p className="muted">No available rooms to allocate right now.</p>
+          ))}
+      </div>
+
+      <div className="form-section">
+        <h3>Meal &amp; Procurement Planning</h3>
+        <div className="form-grid">
+          <Field label="Meal Package">
+            <input disabled value={conference.mealPackage} />
+          </Field>
+          <Field label="Guests">
+            <input disabled value={conference.guestCount.toString()} />
+          </Field>
+          <Field label="Nights">
+            <input disabled value={nights.toString()} />
+          </Field>
+        </div>
+        <button className="secondary-button" onClick={() => onGenerateProcurement(conference.id)} type="button">
+          <Package size={16} />
+          Generate Procurement Request
+        </button>
+        {linkedRequests.length > 0 && (
+          <div className="table-scroll">
+            <table className="stock-table dashboard-table">
+              <thead>
+                <tr>
+                  <th>Request</th>
+                  <th>Items</th>
+                  <th>Estimated Total</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {linkedRequests.map((request) => (
+                  <tr key={request.id}>
+                    <td>{request.id}</td>
+                    <td>{request.items.map((item) => item.description).join(", ")}</td>
+                    <td>{money.format(request.estimatedTotal)}</td>
+                    <td>
+                      <Badge label={request.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {(linkedOrders.length > 0 || linkedActivities.length > 0) && (
+        <div className="form-section">
+          <h3>Restaurant &amp; Activities</h3>
+          {linkedOrders.length > 0 && (
+            <div className="table-scroll">
+              <table className="stock-table dashboard-table">
+                <thead>
+                  <tr>
+                    <th>Order</th>
+                    <th>Items</th>
+                    <th>Total</th>
+                    <th>Settled</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linkedOrders.map((order) => (
+                    <tr key={order.id}>
+                      <td>{order.id}</td>
+                      <td>{order.items.map((item) => `${item.quantity}x ${item.name}`).join(", ")}</td>
+                      <td>{money.format(order.total)}</td>
+                      <td>
+                        <Badge label={order.settledAt ? "Paid" : "Outstanding"} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {linkedActivities.length > 0 && (
+            <div className="table-scroll">
+              <table className="stock-table dashboard-table">
+                <thead>
+                  <tr>
+                    <th>Booking</th>
+                    <th>Activity</th>
+                    <th>Participants</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linkedActivities.map((booking) => (
+                    <tr key={booking.id}>
+                      <td>{booking.id}</td>
+                      <td>{booking.activity}</td>
+                      <td>{booking.participants}</td>
+                      <td>{money.format(booking.price)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="form-section">
+        <h3>Budget vs Actual</h3>
+        <div className="table-scroll">
+          <table className="stock-table dashboard-table">
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th>Budgeted</th>
+                <th>Actual</th>
+              </tr>
+            </thead>
+            <tbody>
+              {CONFERENCE_BUDGET_CATEGORIES.map((category) => (
+                <tr key={category}>
+                  <td>{category}</td>
+                  <td>
+                    <input
+                      type="number"
+                      min={0}
+                      value={budgetDraft[category]}
+                      onChange={(event) => setBudgetDraft((current) => ({ ...current, [category]: Number(event.target.value) }))}
+                    />
+                  </td>
+                  <td>{category === "Procurement" ? money.format(financials.actualProcurementCost) : money.format(budgetDraft[category])}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {budgetDirty && (
+          <button
+            className="secondary-button"
+            onClick={() =>
+              onUpdateBudget(
+                conference.id,
+                CONFERENCE_BUDGET_CATEGORIES.map((category) => ({ category, budgeted: budgetDraft[category] })),
+              )
+            }
+            type="button"
+          >
+            Save Budget
+          </button>
+        )}
+        <div className="folio-line">
+          <span>Projected Revenue (Quotation)</span>
+          <strong>{money.format(budgetTotals.projectedRevenue)}</strong>
+        </div>
+        <div className="folio-line">
+          <span>Projected Cost (Budget)</span>
+          <strong>{money.format(budgetTotals.projectedCost)}</strong>
+        </div>
+        <div className="folio-line total">
+          <span>Projected Profit ({(budgetTotals.projectedMargin * 100).toFixed(0)}% margin)</span>
+          <strong>{money.format(budgetTotals.projectedProfit)}</strong>
+        </div>
+        <div className="folio-line">
+          <span>Actual Revenue (accommodation, restaurant &amp; activities linked to this conference)</span>
+          <strong>{money.format(financials.actualRevenue)}</strong>
+        </div>
+        <div className="folio-line total">
+          <span>Actual Profit</span>
+          <strong>{money.format(financials.actualProfit)}</strong>
+        </div>
+      </div>
+
+      <div className="form-section">
+        <h3>Deposit</h3>
+        <div className="folio-line">
+          <span>Required</span>
+          <strong>{money.format(conference.quotation.depositRequired)}</strong>
+        </div>
+        <div className="folio-line">
+          <span>Received</span>
+          <strong>{money.format(conference.depositReceivedAmount ?? 0)}</strong>
+        </div>
+        <div className="folio-line total">
+          <span>Outstanding</span>
+          <strong>{money.format(depositOutstanding)}</strong>
+        </div>
+        {depositOutstanding > 0 && (
+          <div className="form-grid">
+            <Field label="Amount Received">
+              <input
+                type="number"
+                min={0}
+                max={depositOutstanding}
+                value={depositAmount}
+                onChange={(event) => setDepositAmount(Number(event.target.value))}
+              />
+            </Field>
+            <button className="secondary-button" onClick={() => onRecordDeposit(conference.id, depositAmount)} type="button">
+              Record Deposit
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="form-section">
+        <h3>Task Board</h3>
+        {tasks.length > 0 && (
+          <div className="table-scroll">
+            <table className="stock-table dashboard-table">
+              <thead>
+                <tr>
+                  <th>Department</th>
+                  <th>Task</th>
+                  <th>Owner</th>
+                  <th>Due</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tasks.map((task) => (
+                  <tr key={task.id}>
+                    <td>{task.department}</td>
+                    <td>{task.description}</td>
+                    <td>{task.owner}</td>
+                    <td>{task.dueDate}</td>
+                    <td>
+                      <Badge label={task.priority} />
+                    </td>
+                    <td>
+                      <Badge label={task.status} />
+                    </td>
+                    <td className="actions-cell">
+                      {task.status !== "Done" && (
+                        <button className="secondary-button" onClick={() => onCompleteTask(task.id)} type="button">
+                          Mark Done
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="form-grid">
+          <Field label="Department">
+            <select value={taskDepartment} onChange={(event) => setTaskDepartment(event.target.value as ConferenceDepartment)}>
+              {CONFERENCE_DEPARTMENTS.map((department) => (
+                <option key={department} value={department}>
+                  {department}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Task">
+            <input value={taskDescription} onChange={(event) => setTaskDescription(event.target.value)} placeholder="e.g. Confirm menu with kitchen" />
+          </Field>
+          <Field label="Owner">
+            <input value={taskOwner} onChange={(event) => setTaskOwner(event.target.value)} placeholder="e.g. Memory" />
+          </Field>
+          <Field label="Due Date">
+            <select value={taskDueDate} onChange={(event) => setTaskDueDate(event.target.value)}>
+              {dates.map((date) => (
+                <option key={date} value={date}>
+                  {date}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Priority">
+            <select value={taskPriority} onChange={(event) => setTaskPriority(event.target.value as ConferenceTaskPriority)}>
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+            </select>
+          </Field>
+        </div>
+        <div className="sheet-footer">
+          <button
+            className="secondary-button"
+            disabled={!taskDescription || !taskOwner}
+            onClick={() => {
+              onAddTask(conference.id, {
+                department: taskDepartment,
+                description: taskDescription,
+                owner: taskOwner,
+                dueDate: taskDueDate,
+                priority: taskPriority,
+              });
+              setTaskDescription("");
+              setTaskOwner("");
+            }}
+            type="button"
+          >
+            <Plus size={16} />
+            Add Task
+          </button>
+        </div>
+      </div>
+    </Drawer>
+  );
+}
+
 function Page({
   title,
   description,
@@ -7379,9 +9373,11 @@ function HousekeepingChecklistDetailModal({
 }
 
 function ActivityBookingDrawer({
+  conferences,
   onClose,
   onSave,
 }: {
+  conferences: Conference[];
   onClose: () => void;
   onSave: (values: ActivityBookingFormValues) => void;
 }) {
@@ -7399,6 +9395,8 @@ function ActivityBookingDrawer({
   const [medicalClear, setMedicalClear] = useState(false);
   const [indemnitySigned, setIndemnitySigned] = useState(false);
   const [notes, setNotes] = useState("");
+  const [conferenceId, setConferenceId] = useState("");
+  const activeConferences = conferences.filter((conference) => conference.status !== "Cancelled" && conference.status !== "Completed");
 
   const updateActivity = (next: ActivityType) => {
     setActivity(next);
@@ -7457,6 +9455,16 @@ function ActivityBookingDrawer({
         <Field label="Weight (kg, optional)">
           <input onChange={(event) => setWeightKg(event.target.value)} placeholder="For zipline/quad weight limits" type="number" value={weightKg} />
         </Field>
+        <Field label="Conference / Event (optional)">
+          <select value={conferenceId} onChange={(event) => setConferenceId(event.target.value)}>
+            <option value="">Not linked to a conference</option>
+            {activeConferences.map((conference) => (
+              <option key={conference.id} value={conference.id}>
+                {conference.name}
+              </option>
+            ))}
+          </select>
+        </Field>
       </div>
 
       <section className="form-section">
@@ -7507,6 +9515,7 @@ function ActivityBookingDrawer({
               medicalClear,
               indemnitySigned,
               notes,
+              conferenceId: conferenceId || undefined,
             })
           }
           type="button"
@@ -7743,10 +9752,12 @@ function SafetyIncidentModal({
 
 function OrderDrawer({
   initialItem,
+  conferences,
   onClose,
   onSave,
 }: {
   initialItem?: string;
+  conferences: Conference[];
   onClose: () => void;
   onSave: (values: PosOrderFormValues) => void;
 }) {
@@ -7760,6 +9771,8 @@ function OrderDrawer({
     return menuItem ? [{ name: menuItem.name, price: menuItem.price, quantity: 1 }] : [];
   });
   const [ageVerified, setAgeVerified] = useState(false);
+  const [conferenceId, setConferenceId] = useState("");
+  const activeConferences = conferences.filter((conference) => conference.status !== "Cancelled" && conference.status !== "Completed");
 
   const addItem = (name: string) => {
     const menuItem = MENU_BY_NAME[name];
@@ -7806,6 +9819,16 @@ function OrderDrawer({
             <option>Cash</option>
             <option>Card</option>
             <option>Room Charge</option>
+          </select>
+        </Field>
+        <Field label="Conference / Event (optional)">
+          <select value={conferenceId} onChange={(event) => setConferenceId(event.target.value)}>
+            <option value="">Not linked to a conference</option>
+            {activeConferences.map((conference) => (
+              <option key={conference.id} value={conference.id}>
+                {conference.name}
+              </option>
+            ))}
           </select>
         </Field>
       </div>
@@ -7874,7 +9897,7 @@ function OrderDrawer({
         <button
           className="primary-button"
           disabled={!canSave}
-          onClick={() => onSave({ table, guest, waiter, payment, items: cart, ageVerified })}
+          onClick={() => onSave({ table, guest, waiter, payment, items: cart, ageVerified, conferenceId: conferenceId || undefined })}
           type="button"
         >
           Send to Kitchen

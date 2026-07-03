@@ -19,11 +19,11 @@ There is no test suite and no lint script configured — don't invent commands f
 
 ## Architecture
 
-**Everything is in `src/App.tsx`** (~8900 lines) plus `src/styles.css` (~1700 lines). There is no component-file splitting — types, seed data, pure helper/`computeXAlerts` functions, the `App()` root component, the six page components, shared UI primitives, and every create/approve drawer or modal all live in this one file, roughly top-to-bottom in that order. Search by function/type name rather than expecting a directory structure.
+**Everything is in `src/App.tsx`** (~9700 lines) plus `src/styles.css` (~1700 lines). There is no component-file splitting — types, seed data, pure helper/`computeXAlerts` functions, the `App()` root component, the seven page components, shared UI primitives, and every create/approve drawer or modal all live in this one file, roughly top-to-bottom in that order. Search by function/type name rather than expecting a directory structure.
 
 ### State
 
-One big `DemoState` object (rooms, reservations, orders, purchaseRequests, purchaseOrders, inventoryItems, suppliers, stockMovements, stockTakes, activities, activityChecklists, safetyIncidents, kitchenChecklists, housekeepingChecklists, complaints, manualTasks, cashRegisters, expenses, nightAuditRuns, businessDay, etc.) is created by `createSeedState()`, held in `useLocalDemoState()`, and persisted to `localStorage` under a versioned key (`storageKey = "blue-hills-erp-demo-vN"`, currently v7).
+One big `DemoState` object (rooms, reservations, orders, purchaseRequests, purchaseOrders, inventoryItems, suppliers, stockMovements, stockTakes, activities, activityChecklists, safetyIncidents, kitchenChecklists, housekeepingChecklists, complaints, manualTasks, cashRegisters, expenses, nightAuditRuns, businessDay, clients, conferences, conferenceTasks, etc.) is created by `createSeedState()`, held in `useLocalDemoState()`, and persisted to `localStorage` under a versioned key (`storageKey = "blue-hills-erp-demo-vN"`, currently v8).
 
 Every mutation goes through `save()` or, more commonly, `withAudit(nextState, message, actor)`, which also prepends an entry to `state.audit` (shown in the dashboard's "Recent Audit Trail"). Handlers in `App()` follow the same shape throughout: `withAudit({ ...state, someArray: [...] }, "human-readable audit line", "Actor Name")`.
 
@@ -33,7 +33,7 @@ The "business date" is a hardcoded constant (`businessDateLabel`, currently `"Ju
 
 ### Navigation & pages
 
-Six top-level modules (`ModuleId`), switched via `activeModule` state and the `navigation` array: Dashboard, Front Office, Restaurant & Kitchen, Housekeeping & Activities, Procurement & Stores, Finance & Night Audit. Each is one large component (`Dashboard`, `FrontOffice`, `RestaurantKitchen`, `Operations`, `Procurement`, `Finance`) that receives `state` plus a pile of `onXxx` callbacks from `App()`.
+Seven top-level modules (`ModuleId`), switched via `activeModule` state and the `navigation` array: Dashboard, Front Office, Restaurant & Kitchen, Housekeeping & Activities, Procurement & Stores, Finance & Night Audit, Conferences & Events. Each is one large component (`Dashboard`, `FrontOffice`, `RestaurantKitchen`, `Operations`, `Procurement`, `Finance`, `Conference`) that receives `state` plus a pile of `onXxx` callbacks from `App()`.
 
 ### Finance: guest folios, revenue, and Night Audit
 
@@ -45,6 +45,16 @@ Finance is not a standalone ledger — it's a live read of every other module's 
 - **Cash registers (`CashRegister`) are per-outlet sessions**, not a single global float: `computeExpectedCash(state, register)` derives expected cash from opening float + that outlet's cash receipts − paid out − refunds; `computeCashVariance` compares it to the manually counted `actualCash`. A register only reaches `"Variance Approved"` when a manager name is supplied alongside a nonzero variance.
 - **Night Audit (`NightAuditRun`) is a real, persisted wizard**, not a checklist that resets on reload — `state.nightAuditRuns` holds the in-progress/completed run, `NIGHT_AUDIT_STEPS` is the six-step source of truth both the wizard UI and `closeBusinessDay()`'s validation iterate over. `closeBusinessDay()` refuses to run while any kitchen ticket is open, any today-departure hasn't checked out, any register is uncounted, or any variance is unapproved — these gates mirror the spec's business rules and should stay in sync with `NIGHT_AUDIT_STEPS` if you add/remove a step.
 - **Closing Business Day does not advance `businessDateIso`/`businessDateLabel`.** Those are still the fixed constants described below — rolling them forward would touch every arrival/departure/date comparison in the app. Instead `state.businessDay.status` flips `"Trading"` → `"Closed"` to represent the day being locked (satisfies the spec's "can only close once" rule) without changing what "today" means elsewhere in the demo.
+
+### Conferences & Events: the cross-department differentiator
+
+Per `CONFERENCE_BOOKING.md`, a conference is a **project**, not a reservation — it's the module that most differentiates this ERP from a generic hotel PMS, since it's the one screen where accommodation, catering, activities, procurement and finance roll up under one client/budget. Key patterns:
+
+- **`Conference` is a standalone entity** (`state.conferences`), linked out to other modules by an optional `conferenceId` field on `Reservation`, `PosOrder`, `PurchaseRequest`, and `ActivityBooking` — never by name-matching. A conference's rooms are however-many `Reservation`s share its `conferenceId` (this is how a multi-room group booking works, since `Reservation.room` is still a single room per record).
+- **`computeConferenceFinancials(state, conference)`** is the live "actual vs budget" read: actual revenue sums linked reservations' `nights × rate` + linked `PosOrder.total` + linked `ActivityBooking.price`; actual procurement cost sums `PurchaseOrder`s whose `requestId` traces back to a linked `PurchaseRequest`. Don't recompute a conference's actuals ad hoc elsewhere — call this.
+- **`generateConferenceProcurementItems(conference)`** is the "27 guests × 2 nights × meal package → procurement list" auto-calculation from the spec, driven by `CONFERENCE_PROCUREMENT_TEMPLATE` (per-guest-per-meal quantities for a fixed item list) and `CONFERENCE_MEAL_MULTIPLIER` (meals/day by package). `onGenerateProcurement` turns that into a real `PurchaseRequest` tagged with `conferenceId`, so it shows up in the normal Procurement & Stores approval flow.
+- **`CONFERENCE_STATUS_ORDER` is the single source of truth for the status pipeline** — `advanceConferenceStatus` in `App()` walks it one step at a time and gates two transitions: into `"Planning"` (blocked until the deposit is fully received) and into `"Ready"` (blocked until `roomsRequired` rooms are allocated). Keep these gates in sync with the order if you add/remove a status.
+- **Deliberately out of scope**: the spec's "Future Enhancements" (SMS/WhatsApp/Teams/Google Calendar sync, online enquiries, AI forecasting) all require internet connectivity and were cut to keep the module honest about the offline-first constraint — don't build stubs for them.
 
 ### Conventions to follow when extending a module
 
@@ -66,6 +76,7 @@ Finance is not a standalone ledger — it's a live read of every other module's 
 - `project_context.md.txt` — business goals, non-negotiable offline/LAN requirement, the full department list the ERP is meant to eventually cover.
 - `workflows.md.txt` — the target step-by-step workflow for each department (reservations, check-in/out, restaurant order, activities booking, purchase request, goods received, stock issue, night audit, etc.) — the spec each module's flow is digitizing.
 - `FINANCE_AND_NIGHT_AUDIT_SPECIFICATION.md` — the Finance module spec: revenue consolidation, guest ledger, payment/cash register handling, the 10-step Night Audit workflow (condensed to `NIGHT_AUDIT_STEPS`'s six in the implementation), and the business rules `closeBusinessDay()` enforces.
+- `CONFERENCE_BOOKING.md` — the Conferences & Events module spec: the conference lifecycle, budget vs actual, automated procurement generation, and the cross-department task board.
 - `*.docx` manuals (`Front Office Manual`, `KITCHEN AND DINING MANUAL`, `Outdoor Activities Manual`, `Food and Beverage Manual`) — the camp's actual paper procedures. The `Read` tool can't open `.docx` directly; extract text with a short Python script using `zipfile` + `xml.etree.ElementTree` against `word/document.xml`, walking paragraphs and table rows.
 
 When a module diverges from these docs, that's usually the thing worth fixing — several past sessions here were gap audits against a specific manual followed by implementing the missing pieces.
