@@ -25,7 +25,6 @@ import {
   Plus,
   Printer,
   Receipt,
-  RotateCcw,
   Search,
   Settings,
   ShieldCheck,
@@ -2283,8 +2282,6 @@ function App() {
 
   const dashboardMetrics = useMemo(() => buildDashboardMetrics(state), [state]);
 
-  const resetDemo = () => save(createSeedState());
-
   const [reservationDrawer, setReservationDrawer] = useState<{ mode: "create" } | { mode: "edit"; id: string } | null>(null);
   const [reservationPrefill, setReservationPrefill] = useState<{ guest?: string; arrival?: string } | null>(null);
   const [checkInReservationId, setCheckInReservationId] = useState<string | null>(null);
@@ -3424,10 +3421,6 @@ function App() {
             <button className="ghost-button" type="button" aria-label="Business date: 02 Jul 2026">
               <CalendarDays size={17} />
               <span className="label-text">Business Date: 02 Jul 2026</span>
-            </button>
-            <button className="primary-button small" onClick={resetDemo} type="button" aria-label="Reset demo data">
-              <RotateCcw size={15} />
-              <span className="label-text">Reset Demo</span>
             </button>
           </div>
         </header>
