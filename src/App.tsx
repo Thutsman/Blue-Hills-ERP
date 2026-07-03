@@ -394,6 +394,95 @@ type LowStockAlert = {
   severity: "warning" | "danger";
 };
 
+const INVENTORY_LOCATIONS = [
+  "Main Stores",
+  "Kitchen",
+  "Restaurant",
+  "Bar",
+  "Housekeeping",
+  "Maintenance",
+  "Outdoor Activities",
+  "Reception",
+  "Conference Stores",
+] as const;
+
+type InventoryLocation = (typeof INVENTORY_LOCATIONS)[number];
+
+type MovementType = "Issue" | "Transfer" | "Adjustment";
+
+type MovementStatus = "Pending Approval" | "Completed" | "Rejected";
+
+type AdjustmentReason = "Damage" | "Loss" | "Expiry" | "Theft" | "Counting Error" | "Manual Correction";
+
+type StockMovement = {
+  id: string;
+  type: MovementType;
+  itemId: string;
+  itemName: string;
+  unit: string;
+  quantity: number;
+  department?: string;
+  fromLocation?: InventoryLocation;
+  toLocation?: InventoryLocation;
+  adjustmentReason?: AdjustmentReason;
+  reason: string;
+  requestedBy: string;
+  date: string;
+  status: MovementStatus;
+  approvedBy?: string;
+};
+
+type StockIssueFormValues = {
+  itemId: string;
+  quantity: number;
+  department: string;
+  requestedBy: string;
+  reason: string;
+};
+
+type StockTransferFormValues = {
+  itemId: string;
+  quantity: number;
+  fromLocation: InventoryLocation;
+  toLocation: InventoryLocation;
+  requestedBy: string;
+  reason: string;
+};
+
+type StockAdjustmentFormValues = {
+  itemId: string;
+  quantity: number;
+  adjustmentReason: AdjustmentReason;
+  requestedBy: string;
+  reason: string;
+};
+
+type StockTakeStatus = "Open" | "Approved";
+
+type StockTakeLine = {
+  itemId: string;
+  itemName: string;
+  unit: string;
+  expectedQuantity: number;
+  countedQuantity: number;
+};
+
+type StockTake = {
+  id: string;
+  date: string;
+  countedBy: string;
+  items: StockTakeLine[];
+  status: StockTakeStatus;
+  approvedBy?: string;
+  notes?: string;
+};
+
+type StockTakeFormValues = {
+  countedBy: string;
+  items: StockTakeLine[];
+  notes: string;
+};
+
 type ActivityType = "Zipline" | "Quad Bike" | "Mountaineering" | "Putt Putt" | "Biking";
 
 type ActivityBooking = {
@@ -595,6 +684,8 @@ type DemoState = {
   purchaseOrders: PurchaseOrder[];
   inventoryItems: InventoryItem[];
   suppliers: Supplier[];
+  stockMovements: StockMovement[];
+  stockTakes: StockTake[];
   activities: ActivityBooking[];
   enquiries: Enquiry[];
   manualTasks: ManualTask[];
@@ -611,7 +702,7 @@ type DemoState = {
   housekeepingChecklists: HousekeepingChecklist[];
 };
 
-const storageKey = "blue-hills-erp-demo-v5";
+const storageKey = "blue-hills-erp-demo-v6";
 
 const LODGE_ORDER: Lodge[] = ["Zebra", "Kudu", "Impala", "Dormitory"];
 
@@ -708,6 +799,8 @@ const STOCK_CATEGORIES: StockCategory[] = [
 ];
 
 const REQUEST_PRIORITIES: RequestPriority[] = ["Low", "Normal", "High", "Urgent"];
+
+const ADJUSTMENT_REASONS: AdjustmentReason[] = ["Damage", "Loss", "Expiry", "Theft", "Counting Error", "Manual Correction"];
 
 function computeLowStockAlerts(items: InventoryItem[]): LowStockAlert[] {
   return items
@@ -834,6 +927,13 @@ type DashboardMetrics = {
   kitchenChecklistSubmittedToday: boolean;
   latestKitchenChecklist?: KitchenClosingChecklist;
   kitchenChecklistAlerts: KitchenChecklistAlert[];
+  procurementSpend: number;
+  outstandingPOs: number;
+  totalInventoryValue: number;
+  lowStockCount: number;
+  transfersToday: number;
+  pendingStockMovements: number;
+  openStockTakesWithVariance: number;
 };
 
 function todayIsoDate() {
@@ -1136,6 +1236,15 @@ function buildDashboardMetrics(state: DemoState): DashboardMetrics {
     kitchenChecklistSubmittedToday: state.kitchenChecklists.some((checklist) => checklist.date === businessDateIso),
     latestKitchenChecklist: getLatestKitchenChecklist(state.kitchenChecklists),
     kitchenChecklistAlerts: computeKitchenChecklistAlerts(getLatestKitchenChecklist(state.kitchenChecklists)),
+    procurementSpend: state.purchaseOrders.reduce((sum, order) => sum + order.total, 0),
+    outstandingPOs: state.purchaseOrders.filter((order) => order.status === "Issued").length,
+    totalInventoryValue: state.inventoryItems.reduce((sum, item) => sum + item.currentQuantity * item.averageCost, 0),
+    lowStockCount: computeLowStockAlerts(state.inventoryItems).length,
+    transfersToday: state.stockMovements.filter((movement) => movement.type === "Transfer" && movement.date === businessDateLabel).length,
+    pendingStockMovements: state.stockMovements.filter((movement) => movement.status === "Pending Approval").length,
+    openStockTakesWithVariance: state.stockTakes.filter(
+      (stockTake) => stockTake.status === "Open" && stockTake.items.some((line) => line.countedQuantity !== line.expectedQuantity),
+    ).length,
   };
 }
 
@@ -1366,6 +1475,89 @@ function createSeedState(): DemoState {
         currentQuantity: 15,
         averageCost: 1.6,
         status: "Active",
+      },
+    ],
+    stockMovements: [
+      {
+        id: "SM-1",
+        type: "Issue",
+        itemId: "ITM-002",
+        itemName: "Chicken",
+        unit: "kg",
+        quantity: 5,
+        department: "Kitchen",
+        reason: "Daily prep for breakfast service",
+        requestedBy: "Chef",
+        date: "Jul 02",
+        status: "Pending Approval",
+      },
+      {
+        id: "SM-2",
+        type: "Issue",
+        itemId: "ITM-001",
+        itemName: "Castle Lite (case)",
+        unit: "case",
+        quantity: 3,
+        department: "Bar",
+        reason: "Restocking bar fridge",
+        requestedBy: "Farai",
+        date: "Jul 01",
+        status: "Completed",
+        approvedBy: "Stores Officer",
+      },
+      {
+        id: "SM-3",
+        type: "Transfer",
+        itemId: "ITM-004",
+        itemName: "Diesel",
+        unit: "ltrs",
+        quantity: 10,
+        fromLocation: "Main Stores",
+        toLocation: "Maintenance",
+        reason: "Generator refuel run",
+        requestedBy: "Blessing",
+        date: "Jul 01",
+        status: "Completed",
+      },
+      {
+        id: "SM-4",
+        type: "Adjustment",
+        itemId: "ITM-001",
+        itemName: "Castle Lite (case)",
+        unit: "case",
+        quantity: -2,
+        adjustmentReason: "Damage",
+        reason: "Two bottles broke during delivery unloading",
+        requestedBy: "Farai",
+        date: "Jul 02",
+        status: "Pending Approval",
+      },
+    ],
+    stockTakes: [
+      {
+        id: "ST-1",
+        date: "Jul 01",
+        countedBy: "Stores Officer",
+        status: "Approved",
+        approvedBy: "Manager",
+        items: [
+          { itemId: "ITM-001", itemName: "Castle Lite (case)", unit: "case", expectedQuantity: 6, countedQuantity: 6 },
+          { itemId: "ITM-002", itemName: "Chicken", unit: "kg", expectedQuantity: 23, countedQuantity: 22 },
+          { itemId: "ITM-003", itemName: "Pool Pump Fittings", unit: "set", expectedQuantity: 4, countedQuantity: 4 },
+          { itemId: "ITM-004", itemName: "Diesel", unit: "ltrs", expectedQuantity: 15, countedQuantity: 15 },
+        ],
+      },
+      {
+        id: "ST-2",
+        date: "Jul 02",
+        countedBy: "Tendai",
+        status: "Open",
+        items: [
+          { itemId: "ITM-001", itemName: "Castle Lite (case)", unit: "case", expectedQuantity: 6, countedQuantity: 6 },
+          { itemId: "ITM-002", itemName: "Chicken", unit: "kg", expectedQuantity: 22, countedQuantity: 22 },
+          { itemId: "ITM-003", itemName: "Pool Pump Fittings", unit: "set", expectedQuantity: 4, countedQuantity: 3 },
+          { itemId: "ITM-004", itemName: "Diesel", unit: "ltrs", expectedQuantity: 15, countedQuantity: 15 },
+        ],
       },
     ],
     purchaseRequests: [
@@ -1765,6 +1957,11 @@ function App() {
   const [goodsReceivedOrderId, setGoodsReceivedOrderId] = useState<string | null>(null);
   const [itemDrawerOpen, setItemDrawerOpen] = useState(false);
   const [supplierDrawerOpen, setSupplierDrawerOpen] = useState(false);
+  const [stockIssueDrawerOpen, setStockIssueDrawerOpen] = useState(false);
+  const [stockTransferDrawerOpen, setStockTransferDrawerOpen] = useState(false);
+  const [stockAdjustmentDrawerOpen, setStockAdjustmentDrawerOpen] = useState(false);
+  const [stockTakeDrawerOpen, setStockTakeDrawerOpen] = useState(false);
+  const [stockTakeDetail, setStockTakeDetail] = useState<StockTake | null>(null);
 
   const openNewReservation = () => {
     setReservationPrefill(null);
@@ -2332,6 +2529,179 @@ function App() {
     setSupplierDrawerOpen(false);
   };
 
+  const createStockIssue = (values: StockIssueFormValues) => {
+    const item = state.inventoryItems.find((invItem) => invItem.id === values.itemId);
+    if (!item) return;
+
+    const id = `SM-${state.stockMovements.length + Math.floor(Math.random() * 900)}`;
+    const movement: StockMovement = {
+      id,
+      type: "Issue",
+      itemId: item.id,
+      itemName: item.name,
+      unit: item.unit,
+      quantity: values.quantity,
+      department: values.department,
+      reason: values.reason,
+      requestedBy: values.requestedBy,
+      date: businessDateLabel,
+      status: "Pending Approval",
+    };
+
+    withAudit(
+      { ...state, stockMovements: [movement, ...state.stockMovements] },
+      `${id} requested: issue ${values.quantity} ${item.unit} of ${item.name} to ${values.department}`,
+      values.requestedBy,
+    );
+    setStockIssueDrawerOpen(false);
+  };
+
+  const approveStockIssue = (id: string) => {
+    const movement = state.stockMovements.find((item) => item.id === id);
+    if (!movement || movement.status !== "Pending Approval") return;
+    const item = state.inventoryItems.find((invItem) => invItem.id === movement.itemId);
+    if (!item || item.currentQuantity < movement.quantity) return;
+
+    withAudit(
+      {
+        ...state,
+        inventoryItems: state.inventoryItems.map((invItem) =>
+          invItem.id === movement.itemId ? { ...invItem, currentQuantity: invItem.currentQuantity - movement.quantity } : invItem,
+        ),
+        stockMovements: state.stockMovements.map((item2) =>
+          item2.id === id ? { ...item2, status: "Completed", approvedBy: "Stores" } : item2,
+        ),
+      },
+      `${id} issued: ${movement.quantity} ${movement.unit} of ${movement.itemName} to ${movement.department}, inventory reduced`,
+      "Stores",
+    );
+  };
+
+  const rejectStockMovement = (id: string) => {
+    const movement = state.stockMovements.find((item) => item.id === id);
+    if (!movement || movement.status !== "Pending Approval") return;
+
+    withAudit(
+      { ...state, stockMovements: state.stockMovements.map((item) => (item.id === id ? { ...item, status: "Rejected" } : item)) },
+      `${id} rejected`,
+      "Manager",
+    );
+  };
+
+  const createStockTransfer = (values: StockTransferFormValues) => {
+    const item = state.inventoryItems.find((invItem) => invItem.id === values.itemId);
+    if (!item) return;
+
+    const id = `SM-${state.stockMovements.length + Math.floor(Math.random() * 900)}`;
+    const movement: StockMovement = {
+      id,
+      type: "Transfer",
+      itemId: item.id,
+      itemName: item.name,
+      unit: item.unit,
+      quantity: values.quantity,
+      fromLocation: values.fromLocation,
+      toLocation: values.toLocation,
+      reason: values.reason,
+      requestedBy: values.requestedBy,
+      date: businessDateLabel,
+      status: "Completed",
+    };
+
+    withAudit(
+      { ...state, stockMovements: [movement, ...state.stockMovements] },
+      `${id} transferred ${values.quantity} ${item.unit} of ${item.name} from ${values.fromLocation} to ${values.toLocation}`,
+      values.requestedBy,
+    );
+    setStockTransferDrawerOpen(false);
+  };
+
+  const createStockAdjustment = (values: StockAdjustmentFormValues) => {
+    const item = state.inventoryItems.find((invItem) => invItem.id === values.itemId);
+    if (!item) return;
+
+    const id = `SM-${state.stockMovements.length + Math.floor(Math.random() * 900)}`;
+    const movement: StockMovement = {
+      id,
+      type: "Adjustment",
+      itemId: item.id,
+      itemName: item.name,
+      unit: item.unit,
+      quantity: values.quantity,
+      adjustmentReason: values.adjustmentReason,
+      reason: values.reason,
+      requestedBy: values.requestedBy,
+      date: businessDateLabel,
+      status: "Pending Approval",
+    };
+
+    withAudit(
+      { ...state, stockMovements: [movement, ...state.stockMovements] },
+      `${id} adjustment requested: ${values.quantity > 0 ? "+" : ""}${values.quantity} ${item.unit} of ${item.name} (${values.adjustmentReason})`,
+      values.requestedBy,
+    );
+    setStockAdjustmentDrawerOpen(false);
+  };
+
+  const approveStockAdjustment = (id: string) => {
+    const movement = state.stockMovements.find((item) => item.id === id);
+    if (!movement || movement.status !== "Pending Approval") return;
+
+    withAudit(
+      {
+        ...state,
+        inventoryItems: state.inventoryItems.map((invItem) =>
+          invItem.id === movement.itemId ? { ...invItem, currentQuantity: Math.max(0, invItem.currentQuantity + movement.quantity) } : invItem,
+        ),
+        stockMovements: state.stockMovements.map((item) =>
+          item.id === id ? { ...item, status: "Completed", approvedBy: "Manager" } : item,
+        ),
+      },
+      `${id} adjustment approved: ${movement.quantity > 0 ? "+" : ""}${movement.quantity} ${movement.unit} of ${movement.itemName}`,
+      "Manager",
+    );
+  };
+
+  const createStockTake = (values: StockTakeFormValues) => {
+    const id = `ST-${state.stockTakes.length + Math.floor(Math.random() * 900)}`;
+    const stockTake: StockTake = {
+      id,
+      date: businessDateLabel,
+      countedBy: values.countedBy,
+      items: values.items,
+      status: "Open",
+      notes: values.notes || undefined,
+    };
+
+    const varianceCount = values.items.filter((item) => item.countedQuantity !== item.expectedQuantity).length;
+
+    withAudit(
+      { ...state, stockTakes: [stockTake, ...state.stockTakes] },
+      `${id} stock take submitted by ${values.countedBy}${varianceCount > 0 ? ` - ${varianceCount} item${varianceCount > 1 ? "s" : ""} with variance` : " - no variance"}`,
+      values.countedBy,
+    );
+    setStockTakeDrawerOpen(false);
+  };
+
+  const approveStockTake = (id: string) => {
+    const stockTake = state.stockTakes.find((item) => item.id === id);
+    if (!stockTake || stockTake.status !== "Open") return;
+
+    const countsByItem = new Map(stockTake.items.map((line) => [line.itemId, line.countedQuantity]));
+
+    withAudit(
+      {
+        ...state,
+        inventoryItems: state.inventoryItems.map((invItem) =>
+          countsByItem.has(invItem.id) ? { ...invItem, currentQuantity: countsByItem.get(invItem.id)! } : invItem,
+        ),
+        stockTakes: state.stockTakes.map((item) => (item.id === id ? { ...item, status: "Approved", approvedBy: "Manager" } : item)),
+      },
+      `${id} approved - inventory reconciled to counted quantities`,
+      "Manager",
+    );
+  };
+
   const completeManualTask = (id: string) => {
     const task = state.manualTasks.find((item) => item.id === id);
     if (!task) return;
@@ -2643,6 +3013,15 @@ function App() {
             onOpenGoodsReceivedModal={setGoodsReceivedOrderId}
             onOpenItemDrawer={() => setItemDrawerOpen(true)}
             onOpenSupplierDrawer={() => setSupplierDrawerOpen(true)}
+            onOpenStockIssueDrawer={() => setStockIssueDrawerOpen(true)}
+            onOpenStockTransferDrawer={() => setStockTransferDrawerOpen(true)}
+            onOpenStockAdjustmentDrawer={() => setStockAdjustmentDrawerOpen(true)}
+            onApproveStockIssue={approveStockIssue}
+            onApproveStockAdjustment={approveStockAdjustment}
+            onRejectStockMovement={rejectStockMovement}
+            onOpenStockTakeDrawer={() => setStockTakeDrawerOpen(true)}
+            onApproveStockTake={approveStockTake}
+            onOpenStockTakeDetail={setStockTakeDetail}
           />
         )}
         {activeModule === "finance" && <Finance state={state} totals={totals} onMarkReportPrinted={markReportPrinted} />}
@@ -2758,6 +3137,24 @@ function App() {
       )}
 
       {supplierDrawerOpen && <SupplierDrawer onClose={() => setSupplierDrawerOpen(false)} onSave={createSupplier} />}
+
+      {stockIssueDrawerOpen && (
+        <StockIssueDrawer inventoryItems={state.inventoryItems} onClose={() => setStockIssueDrawerOpen(false)} onSave={createStockIssue} />
+      )}
+
+      {stockTransferDrawerOpen && (
+        <StockTransferDrawer inventoryItems={state.inventoryItems} onClose={() => setStockTransferDrawerOpen(false)} onSave={createStockTransfer} />
+      )}
+
+      {stockAdjustmentDrawerOpen && (
+        <StockAdjustmentDrawer inventoryItems={state.inventoryItems} onClose={() => setStockAdjustmentDrawerOpen(false)} onSave={createStockAdjustment} />
+      )}
+
+      {stockTakeDrawerOpen && (
+        <StockTakeDrawer inventoryItems={state.inventoryItems} onClose={() => setStockTakeDrawerOpen(false)} onSave={createStockTake} />
+      )}
+
+      {stockTakeDetail && <StockTakeDetailModal stockTake={stockTakeDetail} onClose={() => setStockTakeDetail(null)} />}
     </div>
   );
 }
@@ -2939,6 +3336,30 @@ function Dashboard({
     });
   }
 
+  if (metrics.pendingStockMovements > 0) {
+    attentionItems.push({
+      key: "pending-stock-movements",
+      icon: Package,
+      title: `${metrics.pendingStockMovements} stock movement${metrics.pendingStockMovements > 1 ? "s" : ""} awaiting approval`,
+      description: state.stockMovements
+        .filter((movement) => movement.status === "Pending Approval")
+        .map((movement) => `${movement.id} - ${movement.type} of ${movement.itemName}`)
+        .join(", "),
+    });
+  }
+
+  if (metrics.openStockTakesWithVariance > 0) {
+    attentionItems.push({
+      key: "stock-take-variance",
+      icon: Warehouse,
+      title: `${metrics.openStockTakesWithVariance} stock take${metrics.openStockTakesWithVariance > 1 ? "s" : ""} with unresolved variance`,
+      description: state.stockTakes
+        .filter((stockTake) => stockTake.status === "Open" && stockTake.items.some((line) => line.countedQuantity !== line.expectedQuantity))
+        .map((stockTake) => `${stockTake.id} counted by ${stockTake.countedBy}`)
+        .join(", "),
+    });
+  }
+
   return (
     <Page title="Executive Dashboard" description="Live operational picture for Blue Hills Camp." action="Print Manager Pack" icon={Printer}>
       <div className="kpi-grid">
@@ -2980,6 +3401,22 @@ function Dashboard({
           icon={Utensils}
           trend={`${metrics.openKitchenTickets} order${metrics.openKitchenTickets === 1 ? "" : "s"} still open`}
           tone={metrics.kitchenChecklistAlerts.length > 0 ? "warning" : undefined}
+        />
+        <KpiCard
+          label="Procurement"
+          value={money.format(metrics.procurementSpend)}
+          helper={`${metrics.outstandingPOs} purchase order${metrics.outstandingPOs === 1 ? "" : "s"} outstanding`}
+          icon={Package}
+          trend={`${metrics.pendingPurchases} request${metrics.pendingPurchases === 1 ? "" : "s"} awaiting approval`}
+          tone={metrics.pendingPurchases > 0 ? "warning" : undefined}
+        />
+        <KpiCard
+          label="Inventory Value"
+          value={money.format(metrics.totalInventoryValue)}
+          helper={`${metrics.lowStockCount} item${metrics.lowStockCount === 1 ? "" : "s"} at or below reorder level`}
+          icon={Warehouse}
+          trend={`${metrics.transfersToday} transfer${metrics.transfersToday === 1 ? "" : "s"} today`}
+          tone={metrics.lowStockCount > 0 ? "danger" : undefined}
         />
       </div>
 
@@ -3975,6 +4412,15 @@ function Procurement({
   onOpenGoodsReceivedModal,
   onOpenItemDrawer,
   onOpenSupplierDrawer,
+  onOpenStockIssueDrawer,
+  onOpenStockTransferDrawer,
+  onOpenStockAdjustmentDrawer,
+  onApproveStockIssue,
+  onApproveStockAdjustment,
+  onRejectStockMovement,
+  onOpenStockTakeDrawer,
+  onApproveStockTake,
+  onOpenStockTakeDetail,
 }: {
   state: DemoState;
   onApproveRequest: (id: string) => void;
@@ -3985,11 +4431,22 @@ function Procurement({
   onOpenGoodsReceivedModal: (orderId: string) => void;
   onOpenItemDrawer: () => void;
   onOpenSupplierDrawer: () => void;
+  onOpenStockIssueDrawer: () => void;
+  onOpenStockTransferDrawer: () => void;
+  onOpenStockAdjustmentDrawer: () => void;
+  onApproveStockIssue: (id: string) => void;
+  onApproveStockAdjustment: (id: string) => void;
+  onRejectStockMovement: (id: string) => void;
+  onOpenStockTakeDrawer: () => void;
+  onApproveStockTake: (id: string) => void;
+  onOpenStockTakeDetail: (stockTake: StockTake) => void;
 }) {
   const lowStockAlerts = computeLowStockAlerts(state.inventoryItems);
   const supplierName = (id: string) => state.suppliers.find((supplier) => supplier.id === id)?.name ?? "Unknown supplier";
   const pendingApprovals = state.purchaseRequests.filter((request) => request.status === "Pending Approval").length;
   const openOrders = state.purchaseOrders.filter((order) => order.status === "Issued").length;
+  const pendingMovements = state.stockMovements.filter((movement) => movement.status === "Pending Approval").length;
+  const openStockTakes = state.stockTakes.filter((stockTake) => stockTake.status === "Open").length;
 
   return (
     <Page
@@ -4233,23 +4690,149 @@ function Procurement({
       </section>
 
       <section className="panel">
-        <PanelHeader title="Still To Digitize" subtitle="Genuine gaps that remain after the request-to-stock loop above." />
+        <PanelHeader
+          title="Stock Movements"
+          subtitle="Issues, transfers and adjustments - every movement requires a reason."
+          action={
+            <div className="button-row">
+              <button className="secondary-button" onClick={onOpenStockIssueDrawer} type="button">
+                <Plus size={16} />
+                Issue Stock
+              </button>
+              <button className="secondary-button" onClick={onOpenStockTransferDrawer} type="button">
+                <Plus size={16} />
+                Transfer Stock
+              </button>
+              <button className="secondary-button" onClick={onOpenStockAdjustmentDrawer} type="button">
+                <Plus size={16} />
+                Adjust Stock
+              </button>
+            </div>
+          }
+        />
+        <table>
+          <thead>
+            <tr>
+              <th>Movement</th>
+              <th>Type</th>
+              <th>Item</th>
+              <th>Qty</th>
+              <th>Detail</th>
+              <th>Reason</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.stockMovements.length === 0 && (
+              <tr>
+                <td colSpan={8}>
+                  <p className="muted">No stock movements yet.</p>
+                </td>
+              </tr>
+            )}
+            {state.stockMovements.map((movement) => (
+              <tr key={movement.id}>
+                <td>{movement.id}</td>
+                <td>
+                  <Badge label={movement.type} />
+                </td>
+                <td>{movement.itemName}</td>
+                <td>
+                  {movement.quantity > 0 && movement.type === "Adjustment" ? "+" : ""}
+                  {movement.quantity} {movement.unit}
+                </td>
+                <td>
+                  {movement.type === "Issue" && movement.department}
+                  {movement.type === "Transfer" && `${movement.fromLocation} to ${movement.toLocation}`}
+                  {movement.type === "Adjustment" && movement.adjustmentReason}
+                </td>
+                <td>{movement.reason}</td>
+                <td>
+                  <Badge label={movement.status} />
+                </td>
+                <td className="actions-cell">
+                  {movement.status === "Pending Approval" && movement.type === "Issue" && (
+                    <>
+                      <button className="secondary-button" onClick={() => onApproveStockIssue(movement.id)} type="button">
+                        Approve &amp; Issue
+                      </button>
+                      <button className="ghost-button" onClick={() => onRejectStockMovement(movement.id)} type="button">
+                        Reject
+                      </button>
+                    </>
+                  )}
+                  {movement.status === "Pending Approval" && movement.type === "Adjustment" && (
+                    <>
+                      <button className="secondary-button" onClick={() => onApproveStockAdjustment(movement.id)} type="button">
+                        Approve
+                      </button>
+                      <button className="ghost-button" onClick={() => onRejectStockMovement(movement.id)} type="button">
+                        Reject
+                      </button>
+                    </>
+                  )}
+                  {movement.status !== "Pending Approval" && <span className="muted">Logged</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="panel">
+        <PanelHeader
+          title="Stock Takes"
+          subtitle="Expected vs. counted quantities, with an automatic variance report."
+          action={
+            <button className="secondary-button" onClick={onOpenStockTakeDrawer} type="button">
+              <Plus size={16} />
+              New Stock Take
+            </button>
+          }
+        />
+        <div className="stack">
+          {state.stockTakes.length === 0 && <p className="muted">No stock takes recorded yet.</p>}
+          {state.stockTakes.map((stockTake) => {
+            const varianceCount = stockTake.items.filter((line) => line.countedQuantity !== line.expectedQuantity).length;
+            return (
+              <div className="task-card" key={stockTake.id}>
+                <div>
+                  <strong>
+                    {stockTake.id} - {stockTake.date}
+                  </strong>
+                  <span>
+                    Counted by {stockTake.countedBy} - {stockTake.items.length} items
+                    {varianceCount > 0 ? `, ${varianceCount} with variance` : ", no variance"}
+                  </span>
+                </div>
+                <Badge label={stockTake.status} />
+                <button className="secondary-button" onClick={() => onOpenStockTakeDetail(stockTake)} type="button">
+                  View
+                </button>
+                {stockTake.status === "Open" && (
+                  <button className="primary-button small" onClick={() => onApproveStockTake(stockTake.id)} type="button">
+                    Approve
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="panel">
+        <PanelHeader title="Still To Digitize" subtitle="Genuine gaps that remain after the request-to-stock and movement workflows above." />
         <div className="control-grid">
-          <ControlCard
-            title="Department Stock Issue"
-            detail="Departments request stock from Main Stores, stores approves, stock reduces and consumption is recorded per department."
-            status="Missing"
-          />
-          <ControlCard
-            title="Stock Transfer & Adjustment"
-            detail="Transfers between locations and adjustments for damage/loss/theft, with manager approval and a full movement ledger."
-            status="Missing"
-          />
-          <ControlCard title="Stock Take & Variance Report" detail="Expected vs. counted quantities with an automatic variance report." status="Missing" />
           <ControlCard
             title="Receipt Upload"
             detail="Supplier receipts (PDF/image) attached directly to a Purchase Order for finance verification."
             status="Missing"
+          />
+          <ControlCard
+            title="Per-Location Balances"
+            detail="Transfers are logged for audit but the item master still tracks one aggregate quantity rather than a balance per location."
+            status="Partial"
           />
         </div>
       </section>
@@ -6565,6 +7148,369 @@ function SupplierDrawer({ onClose, onSave }: { onClose: () => void; onSave: (val
         </button>
       </div>
     </Drawer>
+  );
+}
+
+function StockIssueDrawer({
+  inventoryItems,
+  onClose,
+  onSave,
+}: {
+  inventoryItems: InventoryItem[];
+  onClose: () => void;
+  onSave: (values: StockIssueFormValues) => void;
+}) {
+  const [itemId, setItemId] = useState(inventoryItems[0]?.id ?? "");
+  const [quantity, setQuantity] = useState(1);
+  const [department, setDepartment] = useState("");
+  const [requestedBy, setRequestedBy] = useState("");
+  const [reason, setReason] = useState("");
+
+  const selectedItem = inventoryItems.find((item) => item.id === itemId);
+  const canSave = Boolean(itemId && quantity > 0 && department && requestedBy && reason);
+
+  return (
+    <Drawer title="Issue Stock" description="Department requests stock from Main Stores; Stores approves and issues it." onClose={onClose}>
+      <div className="form-grid">
+        <Field label="Item">
+          <select value={itemId} onChange={(event) => setItemId(event.target.value)}>
+            {inventoryItems.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name} ({item.currentQuantity} {item.unit} in stock)
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={`Quantity${selectedItem ? ` (${selectedItem.unit})` : ""}`}>
+          <input min={1} onChange={(event) => setQuantity(Number(event.target.value))} type="number" value={quantity} />
+        </Field>
+        <Field label="Department">
+          <select value={department} onChange={(event) => setDepartment(event.target.value)}>
+            <option value="">Select department...</option>
+            {INVENTORY_LOCATIONS.filter((location) => location !== "Main Stores").map((location) => (
+              <option key={location} value={location}>
+                {location}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Requested By">
+          <input value={requestedBy} onChange={(event) => setRequestedBy(event.target.value)} />
+        </Field>
+      </div>
+
+      <Field label="Reason">
+        <textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={2} placeholder="What is this stock needed for?" />
+      </Field>
+
+      {selectedItem && quantity > selectedItem.currentQuantity && (
+        <div className="finding-banner blocked">
+          Only {selectedItem.currentQuantity} {selectedItem.unit} in stock - inventory cannot go negative.
+        </div>
+      )}
+
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button
+          className="primary-button"
+          disabled={!canSave}
+          onClick={() => onSave({ itemId, quantity, department, requestedBy, reason })}
+          type="button"
+        >
+          Submit Request
+        </button>
+      </div>
+    </Drawer>
+  );
+}
+
+function StockTransferDrawer({
+  inventoryItems,
+  onClose,
+  onSave,
+}: {
+  inventoryItems: InventoryItem[];
+  onClose: () => void;
+  onSave: (values: StockTransferFormValues) => void;
+}) {
+  const [itemId, setItemId] = useState(inventoryItems[0]?.id ?? "");
+  const [quantity, setQuantity] = useState(1);
+  const [fromLocation, setFromLocation] = useState<InventoryLocation>("Main Stores");
+  const [toLocation, setToLocation] = useState<InventoryLocation>("Kitchen");
+  const [requestedBy, setRequestedBy] = useState("");
+  const [reason, setReason] = useState("");
+
+  const canSave = Boolean(itemId && quantity > 0 && fromLocation !== toLocation && requestedBy && reason);
+
+  return (
+    <Drawer title="Transfer Stock" description="Move stock between locations, e.g. Main Stores to Kitchen or Bar." onClose={onClose}>
+      <div className="form-grid">
+        <Field label="Item">
+          <select value={itemId} onChange={(event) => setItemId(event.target.value)}>
+            {inventoryItems.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Quantity">
+          <input min={1} onChange={(event) => setQuantity(Number(event.target.value))} type="number" value={quantity} />
+        </Field>
+        <Field label="From">
+          <select value={fromLocation} onChange={(event) => setFromLocation(event.target.value as InventoryLocation)}>
+            {INVENTORY_LOCATIONS.map((location) => (
+              <option key={location} value={location}>
+                {location}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="To">
+          <select value={toLocation} onChange={(event) => setToLocation(event.target.value as InventoryLocation)}>
+            {INVENTORY_LOCATIONS.map((location) => (
+              <option key={location} value={location}>
+                {location}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Requested By">
+          <input value={requestedBy} onChange={(event) => setRequestedBy(event.target.value)} />
+        </Field>
+      </div>
+
+      <Field label="Reason">
+        <textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={2} />
+      </Field>
+
+      {fromLocation === toLocation && <div className="finding-banner blocked">From and To locations must be different.</div>}
+
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button
+          className="primary-button"
+          disabled={!canSave}
+          onClick={() => onSave({ itemId, quantity, fromLocation, toLocation, requestedBy, reason })}
+          type="button"
+        >
+          Log Transfer
+        </button>
+      </div>
+    </Drawer>
+  );
+}
+
+function StockAdjustmentDrawer({
+  inventoryItems,
+  onClose,
+  onSave,
+}: {
+  inventoryItems: InventoryItem[];
+  onClose: () => void;
+  onSave: (values: StockAdjustmentFormValues) => void;
+}) {
+  const [itemId, setItemId] = useState(inventoryItems[0]?.id ?? "");
+  const [quantity, setQuantity] = useState(0);
+  const [adjustmentReason, setAdjustmentReason] = useState<AdjustmentReason>("Damage");
+  const [requestedBy, setRequestedBy] = useState("");
+  const [reason, setReason] = useState("");
+
+  const selectedItem = inventoryItems.find((item) => item.id === itemId);
+  const canSave = Boolean(itemId && quantity !== 0 && requestedBy && reason);
+
+  return (
+    <Drawer title="Adjust Stock" description="Damage, loss, expiry, theft or a manual correction - requires manager approval." onClose={onClose}>
+      <div className="form-grid">
+        <Field label="Item">
+          <select value={itemId} onChange={(event) => setItemId(event.target.value)}>
+            {inventoryItems.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name} ({item.currentQuantity} {item.unit} in stock)
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Reason">
+          <select value={adjustmentReason} onChange={(event) => setAdjustmentReason(event.target.value as AdjustmentReason)}>
+            {ADJUSTMENT_REASONS.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={`Quantity Change${selectedItem ? ` (${selectedItem.unit})` : ""}`}>
+          <input onChange={(event) => setQuantity(Number(event.target.value))} type="number" value={quantity} />
+        </Field>
+        <Field label="Requested By">
+          <input value={requestedBy} onChange={(event) => setRequestedBy(event.target.value)} />
+        </Field>
+      </div>
+      <p className="muted">Use a negative number for stock leaving (damage, loss, theft, expiry) and a positive number for a correction upward.</p>
+
+      <Field label="Notes">
+        <textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={2} placeholder="What happened?" />
+      </Field>
+
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button
+          className="primary-button"
+          disabled={!canSave}
+          onClick={() => onSave({ itemId, quantity, adjustmentReason, requestedBy, reason })}
+          type="button"
+        >
+          Submit for Approval
+        </button>
+      </div>
+    </Drawer>
+  );
+}
+
+function StockTakeDrawer({
+  inventoryItems,
+  onClose,
+  onSave,
+}: {
+  inventoryItems: InventoryItem[];
+  onClose: () => void;
+  onSave: (values: StockTakeFormValues) => void;
+}) {
+  const [countedBy, setCountedBy] = useState("");
+  const [notes, setNotes] = useState("");
+  const [counts, setCounts] = useState<number[]>(inventoryItems.map((item) => item.currentQuantity));
+
+  const updateCount = (index: number, value: number) => {
+    setCounts((current) => current.map((count, countIndex) => (countIndex === index ? value : count)));
+  };
+
+  const varianceCount = inventoryItems.filter((item, index) => counts[index] !== item.currentQuantity).length;
+  const canSave = Boolean(countedBy && inventoryItems.length > 0);
+
+  return (
+    <Drawer title="New Stock Take" description="Count every active item; variances are flagged automatically." onClose={onClose}>
+      <div className="form-grid">
+        <Field label="Counted By">
+          <input value={countedBy} onChange={(event) => setCountedBy(event.target.value)} />
+        </Field>
+      </div>
+
+      <section className="checklist-section">
+        <h3>Item Count</h3>
+        <table className="stock-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Expected</th>
+              <th>Counted</th>
+              <th>Variance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {inventoryItems.map((item, index) => {
+              const variance = counts[index] - item.currentQuantity;
+              return (
+                <tr key={item.id} className={variance !== 0 ? "stock-low" : ""}>
+                  <td>
+                    {item.name}
+                    <span className="muted block">{item.unit}</span>
+                  </td>
+                  <td>{item.currentQuantity}</td>
+                  <td>
+                    <input className="stock-input" min={0} onChange={(event) => updateCount(index, Number(event.target.value))} type="number" value={counts[index]} />
+                  </td>
+                  <td className={variance !== 0 ? "stock-low-cell" : ""}>{variance === 0 ? "OK" : variance > 0 ? `+${variance}` : variance}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+
+      <Field label="Notes (optional)">
+        <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} />
+      </Field>
+
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button
+          className="primary-button"
+          disabled={!canSave}
+          onClick={() =>
+            onSave({
+              countedBy,
+              notes,
+              items: inventoryItems.map((item, index) => ({
+                itemId: item.id,
+                itemName: item.name,
+                unit: item.unit,
+                expectedQuantity: item.currentQuantity,
+                countedQuantity: counts[index],
+              })),
+            })
+          }
+          type="button"
+        >
+          Submit Stock Take {varianceCount > 0 ? `(${varianceCount} variance)` : ""}
+        </button>
+      </div>
+    </Drawer>
+  );
+}
+
+function StockTakeDetailModal({ stockTake, onClose }: { stockTake: StockTake; onClose: () => void }) {
+  return (
+    <Modal
+      title={`Stock Take - ${stockTake.date}`}
+      description={`Counted by ${stockTake.countedBy}${stockTake.approvedBy ? `, approved by ${stockTake.approvedBy}` : ""}`}
+      onClose={onClose}
+    >
+      <table className="stock-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Expected</th>
+            <th>Counted</th>
+            <th>Variance</th>
+          </tr>
+        </thead>
+        <tbody>
+          {stockTake.items.map((line) => {
+            const variance = line.countedQuantity - line.expectedQuantity;
+            return (
+              <tr key={line.itemId} className={variance !== 0 ? "stock-low" : ""}>
+                <td>
+                  {line.itemName}
+                  <span className="muted block">{line.unit}</span>
+                </td>
+                <td>{line.expectedQuantity}</td>
+                <td>{line.countedQuantity}</td>
+                <td className={variance !== 0 ? "stock-low-cell" : ""}>{variance === 0 ? "OK" : variance > 0 ? `+${variance}` : variance}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {stockTake.notes && (
+        <Field label="Notes">
+          <p className="muted">{stockTake.notes}</p>
+        </Field>
+      )}
+      <div className="sheet-footer">
+        <button className="ghost-button" onClick={onClose} type="button">
+          Close
+        </button>
+      </div>
+    </Modal>
   );
 }
 
