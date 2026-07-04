@@ -19,7 +19,7 @@ There is no test suite and no lint script configured — don't invent commands f
 
 ## Architecture
 
-**Everything is in `src/App.tsx`** (~9700 lines) plus `src/styles.css` (~1700 lines). There is no component-file splitting — types, seed data, pure helper/`computeXAlerts` functions, the `App()` root component, the seven page components, shared UI primitives, and every create/approve drawer or modal all live in this one file, roughly top-to-bottom in that order. Search by function/type name rather than expecting a directory structure.
+**Everything is in `src/App.tsx`** (~11000 lines) plus `src/styles.css` (~1700 lines). There is no component-file splitting — types, seed data, pure helper/`computeXAlerts` functions, the `App()` root component, the seven page components, shared UI primitives, and every create/approve drawer or modal all live in this one file, roughly top-to-bottom in that order. Search by function/type name rather than expecting a directory structure.
 
 ### State
 
@@ -69,6 +69,7 @@ Per `CONFERENCE_BOOKING.md`, a conference is a **project**, not a reservation �
 - Sidebar is a normal flex column on desktop; below 960px it becomes an off-canvas drawer (`sidebarOpen` state + `.menu-toggle` hamburger + backdrop).
 - Wide content (data tables, the occupancy density chart, checklist grids) must scroll horizontally *inside its own panel* (`.panel { overflow-x: auto }`), not the page — after layout changes, sanity-check `document.documentElement.scrollWidth <= clientWidth` at a mobile viewport width.
 - Drawers/Modals become full-width bottom sheets under 640px automatically via the shared `.overlay`/`.drawer-panel`/`.modal-panel` CSS — new drawers get this for free as long as they're built with the existing `Drawer`/`Modal` wrapper components.
+- **`.sheet-body` (the scrollable body inside a `Drawer`/`Modal`) has no built-in horizontal scroll** — unlike `.panel`, it only handles vertical overflow, and `.drawer-panel`/`.modal-panel` clip (`overflow: hidden`) rather than scroll. A multi-column `<table>` dropped straight into a Drawer will get silently clipped at the fixed 480px drawer width instead of scrolling (found and fixed in the Conference detail drawer). Wrap any table added inside a Drawer/Modal in `<div className="table-scroll">` (`overflow-x: auto`). `.sheet-footer` also got `flex-wrap: wrap` added for the same reason — three-plus buttons in a row were overflowing the drawer instead of wrapping.
 
 ### Design reference docs (repo root)
 
