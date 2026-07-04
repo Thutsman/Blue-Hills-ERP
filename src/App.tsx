@@ -899,6 +899,7 @@ type Conference = {
   budgetLines: ConferenceBudgetLine[];
   depositReceivedAmount?: number;
   depositReceivedAt?: string;
+  quotationPrintedAt?: string;
   createdAt: string;
   notes?: string;
 };
@@ -934,11 +935,23 @@ type ConferenceFormValues = {
   expiryDate: string;
 };
 
-type ConferenceDepartment = "Reception" | "Kitchen" | "Stores" | "Procurement" | "Housekeeping" | "Maintenance" | "Finance" | "Activities";
+type ConferenceDepartment =
+  | "Sales"
+  | "Reception"
+  | "Kitchen"
+  | "Restaurant"
+  | "Stores"
+  | "Procurement"
+  | "Housekeeping"
+  | "Maintenance"
+  | "Finance"
+  | "Activities";
 
 const CONFERENCE_DEPARTMENTS: ConferenceDepartment[] = [
+  "Sales",
   "Reception",
   "Kitchen",
+  "Restaurant",
   "Stores",
   "Procurement",
   "Housekeeping",
@@ -946,6 +959,24 @@ const CONFERENCE_DEPARTMENTS: ConferenceDepartment[] = [
   "Finance",
   "Activities",
 ];
+
+// Department Readiness cards track these 9 operational departments (per
+// CONFERENCE_PLANNER_SPECIFICATION.md); "Sales" tasks are enquiry/pre-booking
+// work and don't feed a readiness card, and "Reception" tasks (room
+// allocation, registration) roll up into the "Accommodation" card.
+const CONFERENCE_READINESS_DEPARTMENTS = [
+  "Accommodation",
+  "Kitchen",
+  "Restaurant",
+  "Housekeeping",
+  "Maintenance",
+  "Procurement",
+  "Stores",
+  "Activities",
+  "Finance",
+] as const;
+
+type ConferenceReadinessDepartment = (typeof CONFERENCE_READINESS_DEPARTMENTS)[number];
 
 type ConferenceTaskStatus = "Pending" | "In Progress" | "Done" | "Blocked";
 type ConferenceTaskPriority = "Low" | "Medium" | "High";
@@ -959,6 +990,8 @@ type ConferenceTask = {
   dueDate: string;
   priority: ConferenceTaskPriority;
   status: ConferenceTaskStatus;
+  notes?: string;
+  attachments: string[];
   completedAt?: string;
 };
 
@@ -968,6 +1001,97 @@ type ConferenceTaskFormValues = {
   owner: string;
   dueDate: string;
   priority: ConferenceTaskPriority;
+  notes: string;
+  attachmentName: string;
+};
+
+type ConferenceDocumentCategory =
+  | "Contract"
+  | "Guest List"
+  | "Programme"
+  | "Menu"
+  | "Risk Assessment"
+  | "Photo"
+  | "Meeting Notes"
+  | "Other";
+
+const CONFERENCE_DOCUMENT_CATEGORIES: ConferenceDocumentCategory[] = [
+  "Contract",
+  "Guest List",
+  "Programme",
+  "Menu",
+  "Risk Assessment",
+  "Photo",
+  "Meeting Notes",
+  "Other",
+];
+
+type ConferenceDocument = {
+  id: string;
+  conferenceId: string;
+  category: ConferenceDocumentCategory;
+  name: string;
+  addedBy: string;
+  addedAt: string;
+  note?: string;
+};
+
+type ConferenceDocumentFormValues = {
+  category: ConferenceDocumentCategory;
+  name: string;
+  addedBy: string;
+  note: string;
+};
+
+type ConferenceCommunicationChannel = "Phone Call" | "Email" | "WhatsApp" | "Meeting" | "Site Visit" | "Follow-up";
+
+const CONFERENCE_COMMUNICATION_CHANNELS: ConferenceCommunicationChannel[] = [
+  "Phone Call",
+  "Email",
+  "WhatsApp",
+  "Meeting",
+  "Site Visit",
+  "Follow-up",
+];
+
+type ConferenceCommunicationLog = {
+  id: string;
+  conferenceId: string;
+  channel: ConferenceCommunicationChannel;
+  date: string;
+  user: string;
+  summary: string;
+};
+
+type ConferenceCommunicationFormValues = {
+  channel: ConferenceCommunicationChannel;
+  date: string;
+  user: string;
+  summary: string;
+};
+
+type ConferencePostEventReview = {
+  conferenceId: string;
+  attendance: number;
+  customerFeedback: string;
+  incidents: string;
+  lessonsLearned: string;
+  recommendations: string;
+  rating: number;
+  managementComments: string;
+  submittedBy: string;
+  submittedAt: string;
+};
+
+type ConferencePostEventReviewFormValues = {
+  attendance: number;
+  customerFeedback: string;
+  incidents: string;
+  lessonsLearned: string;
+  recommendations: string;
+  rating: number;
+  managementComments: string;
+  submittedBy: string;
 };
 
 type DemoState = {
@@ -1001,9 +1125,12 @@ type DemoState = {
   clients: Client[];
   conferences: Conference[];
   conferenceTasks: ConferenceTask[];
+  conferenceDocuments: ConferenceDocument[];
+  conferenceCommunicationLogs: ConferenceCommunicationLog[];
+  conferencePostEventReviews: ConferencePostEventReview[];
 };
 
-const storageKey = "blue-hills-erp-demo-v8";
+const storageKey = "blue-hills-erp-demo-v9";
 
 const LODGE_ORDER: Lodge[] = ["Zebra", "Kudu", "Impala", "Dormitory"];
 
@@ -2044,6 +2171,151 @@ function computeConferenceDashboardSummary(state: DemoState): ConferenceDashboar
   };
 }
 
+// ---------------------------------------------------------------------------
+// Conference Planner: department readiness, timeline and revenue breakdown.
+// Readiness is computed live from task completion (plus the accommodation
+// room-allocation ratio and procurement request status, the two departments
+// with a concrete existing signal) - never stored as a separate field, per
+// CONFERENCE_PLANNER_SPECIFICATION.md's "task completion updates readiness".
+// ---------------------------------------------------------------------------
+
+type ConferenceReadinessStatus = "Not Started" | "In Progress" | "Ready";
+
+type DepartmentReadiness = {
+  department: ConferenceReadinessDepartment;
+  percent: number;
+  status: ConferenceReadinessStatus;
+  outstandingTasks: number;
+  responsibleUser: string;
+};
+
+function readinessStatusFor(percent: number): ConferenceReadinessStatus {
+  if (percent >= 100) return "Ready";
+  if (percent <= 0) return "Not Started";
+  return "In Progress";
+}
+
+function readinessTaskDepartment(department: ConferenceReadinessDepartment): ConferenceDepartment {
+  return department === "Accommodation" ? "Reception" : department;
+}
+
+function computeDepartmentReadiness(state: DemoState, conference: Conference): DepartmentReadiness[] {
+  const tasks = state.conferenceTasks.filter((task) => task.conferenceId === conference.id);
+  const roomsAllocated = computeConferenceRoomsAllocated(state, conference.id);
+  const linkedRequests = state.purchaseRequests.filter((request) => request.conferenceId === conference.id);
+
+  const procurementStageWeight = (status: PurchaseRequestStatus) =>
+    status === "Converted to PO" ? 100 : status === "Approved" ? 66 : status === "Pending Approval" ? 33 : 0;
+  const procurementPercent = linkedRequests.length
+    ? Math.max(...linkedRequests.map((request) => procurementStageWeight(request.status)))
+    : 0;
+
+  return CONFERENCE_READINESS_DEPARTMENTS.map((department) => {
+    const deptTasks = tasks.filter((task) => task.department === readinessTaskDepartment(department));
+    const doneCount = deptTasks.filter((task) => task.status === "Done").length;
+    const taskPercent = deptTasks.length > 0 ? (doneCount / deptTasks.length) * 100 : null;
+    const outstandingTasks = deptTasks.filter((task) => task.status !== "Done").length;
+    const responsibleUser = deptTasks[0]?.owner ?? "Unassigned";
+
+    let percent: number;
+    if (department === "Accommodation") {
+      const roomsPercent = conference.roomsRequired === 0 ? 100 : (roomsAllocated / conference.roomsRequired) * 100;
+      percent = taskPercent === null ? roomsPercent : (roomsPercent + taskPercent) / 2;
+    } else if (department === "Procurement") {
+      percent = taskPercent === null ? procurementPercent : (procurementPercent + taskPercent) / 2;
+    } else {
+      percent = taskPercent ?? 0;
+    }
+
+    return {
+      department,
+      percent: Math.round(percent),
+      status: readinessStatusFor(percent),
+      outstandingTasks,
+      responsibleUser,
+    };
+  });
+}
+
+function computeOverallReadiness(readiness: DepartmentReadiness[]): number {
+  if (readiness.length === 0) return 0;
+  return Math.round(readiness.reduce((sum, item) => sum + item.percent, 0) / readiness.length);
+}
+
+type ConferenceTimelineStepStatus = "done" | "current" | "upcoming";
+
+type ConferenceTimelineStep = {
+  label: string;
+  status: ConferenceTimelineStepStatus;
+};
+
+const CONFERENCE_TIMELINE_LABELS = [
+  "Enquiry",
+  "Quotation",
+  "Deposit",
+  "Planning",
+  "Procurement",
+  "Preparation",
+  "Arrival",
+  "Conference",
+  "Checkout",
+  "Post Review",
+] as const;
+
+function computeConferenceTimeline(state: DemoState, conference: Conference): ConferenceTimelineStep[] {
+  const businessIndex = dates.indexOf(businessDateLabel);
+  const arrivalIndex = dates.indexOf(conference.arrival);
+  const departureIndex = dates.indexOf(conference.departure);
+  const statusIndex = CONFERENCE_STATUS_ORDER.indexOf(conference.status);
+  const hasReview = state.conferencePostEventReviews.some((review) => review.conferenceId === conference.id);
+
+  const reached = [
+    true,
+    statusIndex >= CONFERENCE_STATUS_ORDER.indexOf("Quotation Sent"),
+    computeConferenceDepositOutstanding(conference) <= 0,
+    statusIndex >= CONFERENCE_STATUS_ORDER.indexOf("Planning"),
+    statusIndex >= CONFERENCE_STATUS_ORDER.indexOf("Procurement"),
+    statusIndex >= CONFERENCE_STATUS_ORDER.indexOf("Ready"),
+    conference.status === "In Progress" || conference.status === "Completed" || businessIndex >= arrivalIndex,
+    conference.status === "In Progress" || conference.status === "Completed",
+    conference.status === "Completed" || businessIndex >= departureIndex,
+    hasReview,
+  ];
+
+  const lastReachedIndex = reached.lastIndexOf(true);
+
+  return CONFERENCE_TIMELINE_LABELS.map((label, index) => ({
+    label,
+    status: index < lastReachedIndex ? "done" : index === lastReachedIndex ? "current" : "upcoming",
+  }));
+}
+
+function computeConferenceRevenueByDepartment(conference: Conference): Array<{ department: string; amount: number }> {
+  const quotation = conference.quotation;
+  return [
+    { department: "Accommodation", amount: quotation.accommodation },
+    { department: "Restaurant (Meals & Tea Breaks)", amount: quotation.breakfast + quotation.lunch + quotation.dinner + quotation.teaBreaks },
+    { department: "Conference Hall", amount: quotation.conferenceHall },
+    { department: "Activities", amount: quotation.activities },
+    { department: "Transport", amount: quotation.transport },
+    { department: "Other (Equipment & Services)", amount: quotation.equipmentHire + quotation.otherServices },
+  ];
+}
+
+function formatArrivalCountdown(conference: Conference): string {
+  if (conference.status === "Completed") return "Event completed";
+  if (conference.status === "Cancelled") return "Cancelled";
+  if (conference.status === "In Progress") return "Conference in progress";
+
+  const businessIndex = dates.indexOf(businessDateLabel);
+  const arrivalIndex = dates.indexOf(conference.arrival);
+  const daysAway = arrivalIndex - businessIndex;
+  if (daysAway < 0) return "Arrival date has passed";
+  if (daysAway === 0) return "Arriving today";
+  if (daysAway === 1) return "Arriving tomorrow";
+  return `Arriving in ${daysAway} days`;
+}
+
 function formatChecklistDateLabel(date: string) {
   const [year, month, day] = date.split("-");
   return `${day}/${month}/${year.slice(2)}`;
@@ -2110,9 +2382,65 @@ function createSeedState(): DemoState {
       email: "events@zcc.org.zw",
       notes: "First leadership training booking with Blue Hills.",
     },
+    {
+      id: "CLI-3",
+      organisation: "Mutare Rotary Club",
+      contactPerson: "Ngoni Mutasa",
+      phone: "+263 77 654 3210",
+      email: "ngoni@mutarerotary.org.zw",
+      notes: "Annual charity gala dinner, no accommodation required.",
+    },
   ];
 
   const conferences: Conference[] = [
+    {
+      id: "CONF-1000",
+      conferenceNumber: "CNF-2026-00",
+      name: "Mutare Rotary Club - Charity Gala Dinner",
+      eventType: "Private Function",
+      clientId: "CLI-3",
+      contactPerson: "Ngoni Mutasa",
+      phone: "+263 77 654 3210",
+      email: "ngoni@mutarerotary.org.zw",
+      arrival: "Jul 02",
+      departure: "Jul 03",
+      guestCount: 60,
+      roomsRequired: 0,
+      conferenceHall: "Acacia Hall",
+      mealPackage: "Day Package",
+      status: "Completed",
+      quotation: {
+        accommodation: 0,
+        conferenceHall: 500,
+        breakfast: 0,
+        lunch: 0,
+        dinner: 1800,
+        teaBreaks: 0,
+        activities: 0,
+        transport: 0,
+        equipmentHire: 300,
+        otherServices: 200,
+        vatRate: 0.15,
+        depositRequired: 500,
+        expiryDate: "Jul 01",
+      },
+      budgetLines: [
+        { category: "Accommodation", budgeted: 0 },
+        { category: "Food", budgeted: 900 },
+        { category: "Beverages", budgeted: 300 },
+        { category: "Activities", budgeted: 0 },
+        { category: "Transport", budgeted: 100 },
+        { category: "Procurement", budgeted: 200 },
+        { category: "Staff", budgeted: 300 },
+        { category: "Cleaning", budgeted: 100 },
+        { category: "Utilities", budgeted: 100 },
+        { category: "Miscellaneous", budgeted: 100 },
+      ],
+      depositReceivedAmount: 500,
+      depositReceivedAt: "Jun 20",
+      quotationPrintedAt: "Jun 18",
+      createdAt: "2026-06-10",
+    },
     {
       id: "CONF-1001",
       conferenceNumber: "CNF-2026-01",
@@ -2219,6 +2547,7 @@ function createSeedState(): DemoState {
       dueDate: "Jul 02",
       priority: "High",
       status: "Done",
+      attachments: [],
       completedAt: "Jul 02",
     },
     {
@@ -2230,6 +2559,7 @@ function createSeedState(): DemoState {
       dueDate: "Jul 02",
       priority: "High",
       status: "Pending",
+      attachments: [],
     },
     {
       id: "CTK-3",
@@ -2240,6 +2570,7 @@ function createSeedState(): DemoState {
       dueDate: "Jul 02",
       priority: "Medium",
       status: "In Progress",
+      attachments: [],
     },
     {
       id: "CTK-4",
@@ -2250,6 +2581,7 @@ function createSeedState(): DemoState {
       dueDate: "Jul 04",
       priority: "High",
       status: "Pending",
+      attachments: [],
     },
     {
       id: "CTK-5",
@@ -2260,6 +2592,234 @@ function createSeedState(): DemoState {
       dueDate: "Jul 04",
       priority: "Medium",
       status: "Pending",
+      attachments: [],
+    },
+    {
+      id: "CTK-6",
+      conferenceId: "CONF-1001",
+      department: "Restaurant",
+      description: "Set up breakfast and dinner service in Baobab Hall",
+      owner: "Lynette",
+      dueDate: "Jul 02",
+      priority: "Medium",
+      status: "Pending",
+      attachments: [],
+    },
+    {
+      id: "CTK-7",
+      conferenceId: "CONF-1001",
+      department: "Stores",
+      description: "Issue kitchen ingredients for Full Board catering",
+      owner: "Stores",
+      dueDate: "Jul 02",
+      priority: "High",
+      status: "In Progress",
+      attachments: [],
+    },
+    {
+      id: "CTK-8",
+      conferenceId: "CONF-1002",
+      department: "Sales",
+      description: "Confirm final guest count with Zimbabwe Council of Churches",
+      owner: "Tendai",
+      dueDate: "Jul 04",
+      priority: "Medium",
+      status: "Pending",
+      attachments: [],
+    },
+    {
+      id: "CTK-9",
+      conferenceId: "CONF-1002",
+      department: "Activities",
+      description: "Propose team-building options for leadership training breaks",
+      owner: "Chipo",
+      dueDate: "Jul 05",
+      priority: "Low",
+      status: "Pending",
+      attachments: [],
+    },
+    {
+      id: "CTK-10",
+      conferenceId: "CONF-1000",
+      department: "Sales",
+      description: "Confirm final guest count with Rotary Club",
+      owner: "Tendai",
+      dueDate: "Jul 02",
+      priority: "Medium",
+      status: "Done",
+      attachments: [],
+      completedAt: "Jul 02",
+    },
+    {
+      id: "CTK-11",
+      conferenceId: "CONF-1000",
+      department: "Kitchen",
+      description: "Prepare gala dinner menu for 60 guests",
+      owner: "Chef Tapiwa",
+      dueDate: "Jul 02",
+      priority: "High",
+      status: "Done",
+      attachments: [],
+      completedAt: "Jul 02",
+    },
+    {
+      id: "CTK-12",
+      conferenceId: "CONF-1000",
+      department: "Restaurant",
+      description: "Set up Acacia Hall tables and decor",
+      owner: "Lynette",
+      dueDate: "Jul 02",
+      priority: "High",
+      status: "Done",
+      notes: "Round tables, 8 per table, white linen as requested.",
+      attachments: ["seating-plan.pdf"],
+      completedAt: "Jul 02",
+    },
+    {
+      id: "CTK-13",
+      conferenceId: "CONF-1000",
+      department: "Maintenance",
+      description: "Test PA system and lighting",
+      owner: "Kudakwashe",
+      dueDate: "Jul 02",
+      priority: "Medium",
+      status: "Done",
+      attachments: [],
+      completedAt: "Jul 02",
+    },
+    {
+      id: "CTK-14",
+      conferenceId: "CONF-1000",
+      department: "Finance",
+      description: "Reconcile final invoice and deposit",
+      owner: "Accounts",
+      dueDate: "Jul 02",
+      priority: "High",
+      status: "Done",
+      attachments: [],
+      completedAt: "Jul 02",
+    },
+    {
+      id: "CTK-15",
+      conferenceId: "CONF-1000",
+      department: "Housekeeping",
+      description: "Clean Acacia Hall after the event",
+      owner: "Memory",
+      dueDate: "Jul 02",
+      priority: "Medium",
+      status: "Done",
+      attachments: [],
+      completedAt: "Jul 02",
+    },
+    {
+      id: "CTK-16",
+      conferenceId: "CONF-1000",
+      department: "Stores",
+      description: "Issue cleaning materials and cutlery",
+      owner: "Stores",
+      dueDate: "Jul 02",
+      priority: "Low",
+      status: "Done",
+      attachments: [],
+      completedAt: "Jul 02",
+    },
+    {
+      id: "CTK-17",
+      conferenceId: "CONF-1000",
+      department: "Procurement",
+      description: "Confirm beverage supplier delivery",
+      owner: "Farai",
+      dueDate: "Jul 01",
+      priority: "Medium",
+      status: "Done",
+      attachments: [],
+      completedAt: "Jul 01",
+    },
+  ];
+
+  const conferenceDocuments: ConferenceDocument[] = [
+    {
+      id: "DOC-1",
+      conferenceId: "CONF-1000",
+      category: "Contract",
+      name: "Rotary Club Gala Dinner Contract.pdf",
+      addedBy: "Tendai",
+      addedAt: "Jun 12",
+    },
+    {
+      id: "DOC-2",
+      conferenceId: "CONF-1000",
+      category: "Guest List",
+      name: "Final Guest List - 60 pax.xlsx",
+      addedBy: "Tendai",
+      addedAt: "Jun 28",
+    },
+    {
+      id: "DOC-3",
+      conferenceId: "CONF-1000",
+      category: "Menu",
+      name: "Gala Dinner Menu - 3 Course.pdf",
+      addedBy: "Chef Tapiwa",
+      addedAt: "Jun 30",
+    },
+    {
+      id: "DOC-4",
+      conferenceId: "CONF-1000",
+      category: "Photo",
+      name: "Event Photos - Gala Dinner.zip",
+      addedBy: "Marketing",
+      addedAt: "Jul 02",
+    },
+  ];
+
+  const conferenceCommunicationLogs: ConferenceCommunicationLog[] = [
+    {
+      id: "COMM-1",
+      conferenceId: "CONF-1000",
+      channel: "Phone Call",
+      date: "Jun 10",
+      user: "Tendai",
+      summary: "Initial enquiry call - confirmed date availability for 60 guests.",
+    },
+    {
+      id: "COMM-2",
+      conferenceId: "CONF-1000",
+      channel: "Email",
+      date: "Jun 15",
+      user: "Tendai",
+      summary: "Sent quotation and draft contract to Ngoni Mutasa.",
+    },
+    {
+      id: "COMM-3",
+      conferenceId: "CONF-1000",
+      channel: "Meeting",
+      date: "Jun 25",
+      user: "Sales & Marketing",
+      summary: "Site visit with Rotary Club committee to finalise hall layout.",
+    },
+    {
+      id: "COMM-4",
+      conferenceId: "CONF-1000",
+      channel: "WhatsApp",
+      date: "Jul 01",
+      user: "Tendai",
+      summary: "Confirmed final numbers and dietary requirements (4 vegetarian).",
+    },
+  ];
+
+  const conferencePostEventReviews: ConferencePostEventReview[] = [
+    {
+      conferenceId: "CONF-1000",
+      attendance: 58,
+      customerFeedback:
+        "Rotary Club committee praised the food quality and hall setup; requested an earlier start time next year.",
+      incidents: "None reported.",
+      lessonsLearned: "Confirm final numbers 3 days out rather than 1 day, to give the kitchen more prep time.",
+      recommendations: "Offer a standing cocktail hour add-on for future galas.",
+      rating: 5,
+      managementComments: "Excellent execution, repeat booking likely for 2027.",
+      submittedBy: "Operations Manager",
+      submittedAt: "Jul 02",
     },
   ];
 
@@ -2373,6 +2933,25 @@ function createSeedState(): DemoState {
         ageVerified: true,
         placedAt: "07:30",
         conferenceId: "CONF-1001",
+      },
+      {
+        id: "KOT-224",
+        table: "Acacia Hall",
+        waiter: "Lynette",
+        guest: "Mutare Rotary Club",
+        items: [
+          { name: "Beef Skewers", price: 10, quantity: 60 },
+          { name: "Chicken Burger", price: 12, quantity: 60 },
+          { name: "Castle Lite", price: 4, quantity: 120 },
+        ],
+        total: 1800,
+        payment: "Cash",
+        kitchenStatus: "Completed",
+        containsAlcohol: true,
+        ageVerified: true,
+        placedAt: "19:00",
+        settledAt: "19:00",
+        conferenceId: "CONF-1000",
       },
     ],
     suppliers: [
@@ -2922,6 +3501,9 @@ function createSeedState(): DemoState {
     clients,
     conferences,
     conferenceTasks,
+    conferenceDocuments,
+    conferenceCommunicationLogs,
+    conferencePostEventReviews,
   };
 }
 
@@ -3979,6 +4561,8 @@ function App() {
       dueDate: values.dueDate,
       priority: values.priority,
       status: "Pending",
+      notes: values.notes || undefined,
+      attachments: values.attachmentName ? [values.attachmentName] : [],
     };
 
     withAudit(
@@ -4001,6 +4585,86 @@ function App() {
       },
       `Conference task completed: ${task.description}`,
       task.owner,
+    );
+  };
+
+  const printConferenceQuotation = (id: string) => {
+    const conference = state.conferences.find((item) => item.id === id);
+    if (!conference) return;
+
+    downloadHtmlFile(`${conference.conferenceNumber}-quotation.html`, buildConferenceQuotationHtml(state, conference));
+
+    withAudit(
+      { ...state, conferences: state.conferences.map((item) => (item.id === id ? { ...item, quotationPrintedAt: businessDateLabel } : item)) },
+      `Quotation printed for ${conference.name}`,
+      "Sales & Marketing",
+    );
+  };
+
+  const addConferenceDocument = (conferenceId: string, values: ConferenceDocumentFormValues) => {
+    const conference = state.conferences.find((item) => item.id === conferenceId);
+    if (!conference) return;
+    const documentId = `DOC-${5 + state.conferenceDocuments.length + Math.floor(Math.random() * 90)}`;
+    const newDocument: ConferenceDocument = {
+      id: documentId,
+      conferenceId,
+      category: values.category,
+      name: values.name,
+      addedBy: values.addedBy,
+      addedAt: businessDateLabel,
+      note: values.note || undefined,
+    };
+
+    withAudit(
+      { ...state, conferenceDocuments: [newDocument, ...state.conferenceDocuments] },
+      `${values.category} document added for ${conference.name}: ${values.name}`,
+      values.addedBy,
+    );
+  };
+
+  const addConferenceCommunicationLog = (conferenceId: string, values: ConferenceCommunicationFormValues) => {
+    const conference = state.conferences.find((item) => item.id === conferenceId);
+    if (!conference) return;
+    const logId = `COMM-${5 + state.conferenceCommunicationLogs.length + Math.floor(Math.random() * 90)}`;
+    const newLog: ConferenceCommunicationLog = {
+      id: logId,
+      conferenceId,
+      channel: values.channel,
+      date: values.date,
+      user: values.user,
+      summary: values.summary,
+    };
+
+    withAudit(
+      { ...state, conferenceCommunicationLogs: [newLog, ...state.conferenceCommunicationLogs] },
+      `${values.channel} logged for ${conference.name}: ${values.summary}`,
+      values.user,
+    );
+  };
+
+  const submitPostEventReview = (conferenceId: string, values: ConferencePostEventReviewFormValues) => {
+    const conference = state.conferences.find((item) => item.id === conferenceId);
+    if (!conference) return;
+    const newReview: ConferencePostEventReview = {
+      conferenceId,
+      attendance: values.attendance,
+      customerFeedback: values.customerFeedback,
+      incidents: values.incidents,
+      lessonsLearned: values.lessonsLearned,
+      recommendations: values.recommendations,
+      rating: values.rating,
+      managementComments: values.managementComments,
+      submittedBy: values.submittedBy,
+      submittedAt: businessDateLabel,
+    };
+
+    withAudit(
+      {
+        ...state,
+        conferencePostEventReviews: [newReview, ...state.conferencePostEventReviews.filter((review) => review.conferenceId !== conferenceId)],
+      },
+      `Post event review submitted for ${conference.name} (${values.rating}/5)`,
+      values.submittedBy,
     );
   };
 
@@ -4456,6 +5120,10 @@ function App() {
             onUpdateBudget={updateConferenceBudget}
             onAddTask={addConferenceTask}
             onCompleteTask={completeConferenceTask}
+            onPrintQuotation={printConferenceQuotation}
+            onAddDocument={addConferenceDocument}
+            onAddCommunicationLog={addConferenceCommunicationLog}
+            onSubmitPostEventReview={submitPostEventReview}
           />
         )}
       </main>
@@ -7256,6 +7924,10 @@ function Conference({
   onUpdateBudget,
   onAddTask,
   onCompleteTask,
+  onPrintQuotation,
+  onAddDocument,
+  onAddCommunicationLog,
+  onSubmitPostEventReview,
 }: {
   state: DemoState;
   onCreateConference: (values: ConferenceFormValues) => void;
@@ -7267,6 +7939,10 @@ function Conference({
   onUpdateBudget: (conferenceId: string, budgetLines: ConferenceBudgetLine[]) => void;
   onAddTask: (conferenceId: string, values: ConferenceTaskFormValues) => void;
   onCompleteTask: (id: string) => void;
+  onPrintQuotation: (id: string) => void;
+  onAddDocument: (conferenceId: string, values: ConferenceDocumentFormValues) => void;
+  onAddCommunicationLog: (conferenceId: string, values: ConferenceCommunicationFormValues) => void;
+  onSubmitPostEventReview: (conferenceId: string, values: ConferencePostEventReviewFormValues) => void;
 }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -7276,6 +7952,13 @@ function Conference({
   const detailConference = state.conferences.find((conference) => conference.id === detailId) ?? null;
   const clientName = (clientId: string) => state.clients.find((client) => client.id === clientId)?.organisation ?? "Unknown client";
   const openTasks = state.conferenceTasks.filter((task) => task.status !== "Done");
+  const activeConferences = state.conferences.filter((conference) => conference.status !== "Cancelled" && conference.status !== "Completed");
+  const averageReadiness = activeConferences.length
+    ? Math.round(
+        activeConferences.reduce((sum, conference) => sum + computeOverallReadiness(computeDepartmentReadiness(state, conference)), 0) /
+          activeConferences.length,
+      )
+    : 0;
 
   return (
     <Page
@@ -7312,6 +7995,13 @@ function Conference({
           icon={ListChecks}
           tone={alerts.some((alert) => alert.key === "conference-tasks-due") ? "warning" : undefined}
         />
+        <KpiCard
+          label="Avg. Readiness"
+          value={`${averageReadiness}%`}
+          helper="Across active conferences"
+          icon={ClipboardCheck}
+          tone={averageReadiness < 60 ? "danger" : averageReadiness < 100 ? "warning" : "success"}
+        />
       </div>
 
       <section className="panel wide">
@@ -7324,8 +8014,10 @@ function Conference({
               <th>Event Type</th>
               <th>Status</th>
               <th>Dates</th>
+              <th>Countdown</th>
               <th>Guests</th>
               <th>Rooms</th>
+              <th>Readiness</th>
               <th>Projected Profit</th>
               <th>Deposit</th>
               <th>Action</th>
@@ -7334,7 +8026,7 @@ function Conference({
           <tbody>
             {state.conferences.length === 0 && (
               <tr>
-                <td colSpan={10}>
+                <td colSpan={12}>
                   <p className="muted">No conferences yet.</p>
                 </td>
               </tr>
@@ -7343,6 +8035,7 @@ function Conference({
               const budget = computeConferenceBudgetTotals(conference);
               const roomsAllocated = computeConferenceRoomsAllocated(state, conference.id);
               const depositOutstanding = computeConferenceDepositOutstanding(conference);
+              const readiness = computeOverallReadiness(computeDepartmentReadiness(state, conference));
               return (
                 <tr key={conference.id}>
                   <td>
@@ -7358,10 +8051,12 @@ function Conference({
                   <td>
                     {conference.arrival} - {conference.departure}
                   </td>
+                  <td>{formatArrivalCountdown(conference)}</td>
                   <td>{conference.guestCount}</td>
                   <td className={roomsAllocated < conference.roomsRequired ? "stock-low-cell" : ""}>
                     {roomsAllocated}/{conference.roomsRequired}
                   </td>
+                  <td className={readiness < 60 ? "stock-low-cell" : ""}>{readiness}%</td>
                   <td>{money.format(budget.projectedProfit)}</td>
                   <td>{depositOutstanding > 0 ? `${money.format(depositOutstanding)} due` : "Paid"}</td>
                   <td className="actions-cell">
@@ -7452,6 +8147,10 @@ function Conference({
           onUpdateBudget={onUpdateBudget}
           onAddTask={onAddTask}
           onCompleteTask={onCompleteTask}
+          onPrintQuotation={onPrintQuotation}
+          onAddDocument={onAddDocument}
+          onAddCommunicationLog={onAddCommunicationLog}
+          onSubmitPostEventReview={onSubmitPostEventReview}
         />
       )}
     </Page>
@@ -7727,6 +8426,21 @@ function ConferenceDrawer({
   );
 }
 
+const CONFERENCE_PLANNER_TABS = [
+  "Overview",
+  "Readiness",
+  "Tasks",
+  "Timeline",
+  "Budget",
+  "Procurement",
+  "Financial",
+  "Documents",
+  "Communication",
+  "Post-Event",
+] as const;
+
+type ConferencePlannerTab = (typeof CONFERENCE_PLANNER_TABS)[number];
+
 function ConferenceDetailDrawer({
   state,
   conference,
@@ -7739,6 +8453,10 @@ function ConferenceDetailDrawer({
   onUpdateBudget,
   onAddTask,
   onCompleteTask,
+  onPrintQuotation,
+  onAddDocument,
+  onAddCommunicationLog,
+  onSubmitPostEventReview,
 }: {
   state: DemoState;
   conference: Conference;
@@ -7751,13 +8469,24 @@ function ConferenceDetailDrawer({
   onUpdateBudget: (conferenceId: string, budgetLines: ConferenceBudgetLine[]) => void;
   onAddTask: (conferenceId: string, values: ConferenceTaskFormValues) => void;
   onCompleteTask: (id: string) => void;
+  onPrintQuotation: (id: string) => void;
+  onAddDocument: (conferenceId: string, values: ConferenceDocumentFormValues) => void;
+  onAddCommunicationLog: (conferenceId: string, values: ConferenceCommunicationFormValues) => void;
+  onSubmitPostEventReview: (conferenceId: string, values: ConferencePostEventReviewFormValues) => void;
 }) {
+  const [activeTab, setActiveTab] = useState<ConferencePlannerTab>("Overview");
+
   const client = state.clients.find((item) => item.id === conference.clientId);
   const nights = conferenceNights(conference);
   const budgetTotals = computeConferenceBudgetTotals(conference);
   const financials = computeConferenceFinancials(state, conference);
   const roomsAllocated = computeConferenceRoomsAllocated(state, conference.id);
   const depositOutstanding = computeConferenceDepositOutstanding(conference);
+  const readiness = computeDepartmentReadiness(state, conference);
+  const overallReadiness = computeOverallReadiness(readiness);
+  const timeline = computeConferenceTimeline(state, conference);
+  const revenueByDepartment = computeConferenceRevenueByDepartment(conference);
+  const budgetVariance = financials.actualProfit - budgetTotals.projectedProfit;
 
   const linkedReservations = state.reservations.filter(
     (reservation) => reservation.conferenceId === conference.id && reservation.status !== "Cancelled",
@@ -7766,9 +8495,16 @@ function ConferenceDetailDrawer({
   const openProcurementRequest = linkedRequests.find(
     (request) => request.status === "Pending Approval" || request.status === "Approved",
   );
+  const linkedRequestIds = new Set(linkedRequests.map((request) => request.id));
   const linkedOrders = state.orders.filter((order) => order.conferenceId === conference.id);
   const linkedActivities = state.activities.filter((booking) => booking.conferenceId === conference.id);
+  const linkedPurchaseOrders = state.purchaseOrders.filter((order) => linkedRequestIds.has(order.requestId));
+  const linkedReceipts = state.receipts.filter((receipt) => linkedReservations.some((reservation) => reservation.id === receipt.reservationId));
   const tasks = state.conferenceTasks.filter((task) => task.conferenceId === conference.id);
+  const documents = state.conferenceDocuments.filter((document) => document.conferenceId === conference.id);
+  const communicationLogs = state.conferenceCommunicationLogs.filter((log) => log.conferenceId === conference.id);
+  const postEventReview = state.conferencePostEventReviews.find((review) => review.conferenceId === conference.id) ?? null;
+  const conferenceOutstandingBalance = linkedReservations.reduce((sum, reservation) => sum + reservation.balance, 0) + depositOutstanding;
 
   const allocatedRoomNumbers = new Set(linkedReservations.map((reservation) => reservation.room));
   const availableRooms = state.rooms.filter((room) => room.status === "Available" && !allocatedRoomNumbers.has(room.number));
@@ -7791,6 +8527,27 @@ function ConferenceDetailDrawer({
   const [taskOwner, setTaskOwner] = useState("");
   const [taskDueDate, setTaskDueDate] = useState(conference.arrival);
   const [taskPriority, setTaskPriority] = useState<ConferenceTaskPriority>("Medium");
+  const [taskNotes, setTaskNotes] = useState("");
+  const [taskAttachmentName, setTaskAttachmentName] = useState("");
+
+  const [docCategory, setDocCategory] = useState<ConferenceDocumentCategory>("Contract");
+  const [docName, setDocName] = useState("");
+  const [docAddedBy, setDocAddedBy] = useState("");
+  const [docNote, setDocNote] = useState("");
+
+  const [commChannel, setCommChannel] = useState<ConferenceCommunicationChannel>("Phone Call");
+  const [commDate, setCommDate] = useState(businessDateLabel);
+  const [commUser, setCommUser] = useState("");
+  const [commSummary, setCommSummary] = useState("");
+
+  const [reviewAttendance, setReviewAttendance] = useState(conference.guestCount);
+  const [reviewFeedback, setReviewFeedback] = useState("");
+  const [reviewIncidents, setReviewIncidents] = useState("");
+  const [reviewLessons, setReviewLessons] = useState("");
+  const [reviewRecommendations, setReviewRecommendations] = useState("");
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewManagementComments, setReviewManagementComments] = useState("");
+  const [reviewSubmittedBy, setReviewSubmittedBy] = useState("");
 
   const currentIndex = CONFERENCE_STATUS_ORDER.indexOf(conference.status);
   const nextStatus = currentIndex >= 0 && currentIndex < CONFERENCE_STATUS_ORDER.length - 1 ? CONFERENCE_STATUS_ORDER[currentIndex + 1] : null;
@@ -7801,190 +8558,324 @@ function ConferenceDetailDrawer({
       : nextStatus === "Ready" && roomsAllocated < conference.roomsRequired
         ? "All rooms must be allocated before the conference is marked Ready."
         : null;
-
-  const printQuotation = () => downloadHtmlFile(`${conference.conferenceNumber}-quotation.html`, buildConferenceQuotationHtml(state, conference));
+  const canSubmitPostEventReview = conference.status === "In Progress" || conference.status === "Completed";
 
   return (
     <Drawer
       title={`${conference.conferenceNumber} - ${conference.name}`}
       description={`${conference.eventType} for ${client?.organisation ?? "Unknown client"} - ${conference.arrival} to ${conference.departure} (${nights} night${nights === 1 ? "" : "s"}), ${conference.guestCount} guests.`}
       onClose={onClose}
+      wide
     >
-      <div className="form-section">
-        <h3>Status</h3>
-        <div className="folio-line">
-          <span>Current Status</span>
-          <Badge label={conference.status} />
-        </div>
-        <div className="sheet-footer">
-          {nextStatus && (
-            <button className="primary-button" disabled={Boolean(blockedReason)} onClick={() => onAdvanceStatus(conference.id)} type="button">
-              Advance to {nextStatus}
-            </button>
-          )}
-          {canCancel && (
-            <button className="ghost-button" onClick={() => onCancelConference(conference.id)} type="button">
-              Cancel Conference
-            </button>
-          )}
-          <button className="secondary-button" onClick={printQuotation} type="button">
-            <Printer size={16} />
-            Print Quotation
+      <div className="tab-row">
+        {CONFERENCE_PLANNER_TABS.map((tab) => (
+          <button
+            className={activeTab === tab ? "primary-button small" : "secondary-button small"}
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            type="button"
+          >
+            {tab}
           </button>
-        </div>
-        {blockedReason && <p className="muted">{blockedReason}</p>}
+        ))}
       </div>
 
-      <div className="form-section">
-        <h3>Client</h3>
-        <div className="form-grid">
-          <Field label="Organisation">
-            <input disabled value={client?.organisation ?? "Unknown"} />
-          </Field>
-          <Field label="Contact Person">
-            <input disabled value={conference.contactPerson} />
-          </Field>
-          <Field label="Phone">
-            <input disabled value={conference.phone} />
-          </Field>
-          <Field label="Email">
-            <input disabled value={conference.email} />
-          </Field>
-        </div>
-      </div>
-
-      <div className="form-section">
-        <h3>Accommodation Planning</h3>
-        <div className="folio-line">
-          <span>Rooms Allocated</span>
-          <strong className={roomsAllocated < conference.roomsRequired ? "stock-low-cell" : ""}>
-            {roomsAllocated} / {conference.roomsRequired}
-          </strong>
-        </div>
-        {linkedReservations.length > 0 && (
-          <div className="table-scroll">
-            <table className="stock-table dashboard-table">
-              <thead>
-                <tr>
-                  <th>Reservation</th>
-                  <th>Room</th>
-                  <th>Rate/Night</th>
-                  <th>Balance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {linkedReservations.map((reservation) => (
-                  <tr key={reservation.id}>
-                    <td>{reservation.id}</td>
-                    <td>{reservation.room}</td>
-                    <td>{money.format(reservation.rate ?? 0)}</td>
-                    <td>{money.format(reservation.balance)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {roomsAllocated < conference.roomsRequired &&
-          (availableRooms.length > 0 ? (
-            <div className="form-grid">
-              <Field label="Allocate Room">
-                <select value={roomChoice} onChange={(event) => setRoomChoice(event.target.value)}>
-                  {availableRooms.map((room) => (
-                    <option key={room.id} value={room.number}>
-                      {room.number} - {room.type}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <button className="secondary-button" onClick={() => onAllocateRoom(conference.id, roomChoice)} type="button">
-                <Plus size={16} />
-                Allocate Room
+      {activeTab === "Overview" && (
+        <>
+          <div className="form-section">
+            <h3>Status</h3>
+            <div className="folio-line">
+              <span>Current Status</span>
+              <Badge label={conference.status} />
+            </div>
+            <div className="sheet-footer">
+              {nextStatus && (
+                <button className="primary-button" disabled={Boolean(blockedReason)} onClick={() => onAdvanceStatus(conference.id)} type="button">
+                  Advance to {nextStatus}
+                </button>
+              )}
+              {canCancel && (
+                <button className="ghost-button" onClick={() => onCancelConference(conference.id)} type="button">
+                  Cancel Conference
+                </button>
+              )}
+              <button className="secondary-button" onClick={() => onPrintQuotation(conference.id)} type="button">
+                <Printer size={16} />
+                Print Quotation
               </button>
             </div>
-          ) : (
-            <p className="muted">No available rooms to allocate right now.</p>
-          ))}
-      </div>
-
-      <div className="form-section">
-        <h3>Meal &amp; Procurement Planning</h3>
-        <div className="form-grid">
-          <Field label="Meal Package">
-            <input disabled value={conference.mealPackage} />
-          </Field>
-          <Field label="Guests">
-            <input disabled value={conference.guestCount.toString()} />
-          </Field>
-          <Field label="Nights">
-            <input disabled value={nights.toString()} />
-          </Field>
-        </div>
-        <button
-          className="secondary-button"
-          disabled={Boolean(openProcurementRequest)}
-          onClick={() => onGenerateProcurement(conference.id)}
-          type="button"
-        >
-          <Package size={16} />
-          Generate Procurement Request
-        </button>
-        {openProcurementRequest && (
-          <p className="muted">
-            {openProcurementRequest.id} is already {openProcurementRequest.status.toLowerCase()} - approve, reject, or convert it in Procurement
-            &amp; Stores before generating another.
-          </p>
-        )}
-        {linkedRequests.length > 0 && (
-          <div className="table-scroll">
-            <table className="stock-table dashboard-table">
-              <thead>
-                <tr>
-                  <th>Request</th>
-                  <th>Items</th>
-                  <th>Estimated Total</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {linkedRequests.map((request) => (
-                  <tr key={request.id}>
-                    <td>{request.id}</td>
-                    <td>{request.items.map((item) => item.description).join(", ")}</td>
-                    <td>{money.format(request.estimatedTotal)}</td>
-                    <td>
-                      <Badge label={request.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {blockedReason && <p className="muted">{blockedReason}</p>}
           </div>
-        )}
-      </div>
 
-      {(linkedOrders.length > 0 || linkedActivities.length > 0) && (
+          <div className="form-section">
+            <h3>Conference Summary</h3>
+            <div className="dashboard-summary-grid">
+              <article className="summary-stat">
+                <span>Overall Readiness</span>
+                <strong>{overallReadiness}%</strong>
+                <p>
+                  {readiness.filter((item) => item.status === "Ready").length} of {readiness.length} departments ready
+                </p>
+              </article>
+              <article className="summary-stat">
+                <span>Projected Profit</span>
+                <strong>{money.format(budgetTotals.projectedProfit)}</strong>
+                <p>{(budgetTotals.projectedMargin * 100).toFixed(0)}% margin</p>
+              </article>
+              <article className="summary-stat">
+                <span>Deposit</span>
+                <strong>{depositOutstanding > 0 ? money.format(depositOutstanding) : "Paid"}</strong>
+                <p>{depositOutstanding > 0 ? "outstanding" : `received ${conference.depositReceivedAt ?? ""}`}</p>
+              </article>
+              <article className="summary-stat">
+                <span>Outstanding Balance</span>
+                <strong>{money.format(conferenceOutstandingBalance)}</strong>
+                <p>Deposit + guest account balances</p>
+              </article>
+              <article className="summary-stat">
+                <span>Countdown</span>
+                <strong>{formatArrivalCountdown(conference)}</strong>
+                <p>
+                  {conference.arrival} - {conference.departure}
+                </p>
+              </article>
+            </div>
+          </div>
+
+          <div className="form-section">
+            <h3>Deposit</h3>
+            <div className="folio-line">
+              <span>Required</span>
+              <strong>{money.format(conference.quotation.depositRequired)}</strong>
+            </div>
+            <div className="folio-line">
+              <span>Received</span>
+              <strong>{money.format(conference.depositReceivedAmount ?? 0)}</strong>
+            </div>
+            <div className="folio-line total">
+              <span>Outstanding</span>
+              <strong>{money.format(depositOutstanding)}</strong>
+            </div>
+            {depositOutstanding > 0 && (
+              <div className="form-grid">
+                <Field label="Amount Received">
+                  <input type="number" min={0} max={depositOutstanding} {...zeroableNumberInput(depositAmount, setDepositAmount)} />
+                </Field>
+                <button className="secondary-button" onClick={() => onRecordDeposit(conference.id, depositAmount)} type="button">
+                  Record Deposit
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="form-section">
+            <h3>Client</h3>
+            <div className="form-grid">
+              <Field label="Organisation">
+                <input disabled value={client?.organisation ?? "Unknown"} />
+              </Field>
+              <Field label="Contact Person">
+                <input disabled value={conference.contactPerson} />
+              </Field>
+              <Field label="Phone">
+                <input disabled value={conference.phone} />
+              </Field>
+              <Field label="Email">
+                <input disabled value={conference.email} />
+              </Field>
+            </div>
+          </div>
+
+          <div className="form-section">
+            <h3>Accommodation Planning</h3>
+            <div className="folio-line">
+              <span>Rooms Allocated</span>
+              <strong className={roomsAllocated < conference.roomsRequired ? "stock-low-cell" : ""}>
+                {roomsAllocated} / {conference.roomsRequired}
+              </strong>
+            </div>
+            {linkedReservations.length > 0 && (
+              <div className="table-scroll">
+                <table className="stock-table dashboard-table">
+                  <thead>
+                    <tr>
+                      <th>Reservation</th>
+                      <th>Room</th>
+                      <th>Rate/Night</th>
+                      <th>Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {linkedReservations.map((reservation) => (
+                      <tr key={reservation.id}>
+                        <td>{reservation.id}</td>
+                        <td>{reservation.room}</td>
+                        <td>{money.format(reservation.rate ?? 0)}</td>
+                        <td>{money.format(reservation.balance)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {roomsAllocated < conference.roomsRequired &&
+              (availableRooms.length > 0 ? (
+                <div className="form-grid">
+                  <Field label="Allocate Room">
+                    <select value={roomChoice} onChange={(event) => setRoomChoice(event.target.value)}>
+                      {availableRooms.map((room) => (
+                        <option key={room.id} value={room.number}>
+                          {room.number} - {room.type}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <button className="secondary-button" onClick={() => onAllocateRoom(conference.id, roomChoice)} type="button">
+                    <Plus size={16} />
+                    Allocate Room
+                  </button>
+                </div>
+              ) : (
+                <p className="muted">No available rooms to allocate right now.</p>
+              ))}
+          </div>
+
+          {(linkedOrders.length > 0 || linkedActivities.length > 0) && (
+            <div className="form-section">
+              <h3>Restaurant &amp; Activities</h3>
+              {linkedOrders.length > 0 && (
+                <div className="table-scroll">
+                  <table className="stock-table dashboard-table">
+                    <thead>
+                      <tr>
+                        <th>Order</th>
+                        <th>Items</th>
+                        <th>Total</th>
+                        <th>Settled</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {linkedOrders.map((order) => (
+                        <tr key={order.id}>
+                          <td>{order.id}</td>
+                          <td>{order.items.map((item) => `${item.quantity}x ${item.name}`).join(", ")}</td>
+                          <td>{money.format(order.total)}</td>
+                          <td>
+                            <Badge label={order.settledAt ? "Paid" : "Outstanding"} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {linkedActivities.length > 0 && (
+                <div className="table-scroll">
+                  <table className="stock-table dashboard-table">
+                    <thead>
+                      <tr>
+                        <th>Booking</th>
+                        <th>Activity</th>
+                        <th>Participants</th>
+                        <th>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {linkedActivities.map((booking) => (
+                        <tr key={booking.id}>
+                          <td>{booking.id}</td>
+                          <td>{booking.activity}</td>
+                          <td>{booking.participants}</td>
+                          <td>{money.format(booking.price)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {activeTab === "Readiness" && (
         <div className="form-section">
-          <h3>Restaurant &amp; Activities</h3>
-          {linkedOrders.length > 0 && (
+          <h3>Department Readiness</h3>
+          <div className="folio-line total">
+            <span>Overall Readiness</span>
+            <strong>{overallReadiness}%</strong>
+          </div>
+          <div className="readiness-grid">
+            {readiness.map((item) => (
+              <article className="readiness-card" key={item.department}>
+                <div className="readiness-card-header">
+                  <strong>{item.department}</strong>
+                  <Badge label={item.status} />
+                </div>
+                <div className="readiness-bar">
+                  <div
+                    className={`readiness-bar-fill ${item.status === "Ready" ? "ready" : item.status === "Not Started" ? "not-started" : ""}`}
+                    style={{ width: `${item.percent}%` }}
+                  />
+                </div>
+                <div className="folio-line">
+                  <span>Progress</span>
+                  <strong>{item.percent}%</strong>
+                </div>
+                <div className="folio-line">
+                  <span>Outstanding Tasks</span>
+                  <strong>{item.outstandingTasks}</strong>
+                </div>
+                <div className="folio-line">
+                  <span>Responsible</span>
+                  <strong>{item.responsibleUser}</strong>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "Tasks" && (
+        <div className="form-section">
+          <h3>Task Board</h3>
+          {tasks.length > 0 && (
             <div className="table-scroll">
               <table className="stock-table dashboard-table">
                 <thead>
                   <tr>
-                    <th>Order</th>
-                    <th>Items</th>
-                    <th>Total</th>
-                    <th>Settled</th>
+                    <th>Department</th>
+                    <th>Task</th>
+                    <th>Owner</th>
+                    <th>Due</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Notes</th>
+                    <th>Attachments</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {linkedOrders.map((order) => (
-                    <tr key={order.id}>
-                      <td>{order.id}</td>
-                      <td>{order.items.map((item) => `${item.quantity}x ${item.name}`).join(", ")}</td>
-                      <td>{money.format(order.total)}</td>
+                  {tasks.map((task) => (
+                    <tr key={task.id}>
+                      <td>{task.department}</td>
+                      <td>{task.description}</td>
+                      <td>{task.owner}</td>
+                      <td>{task.dueDate}</td>
                       <td>
-                        <Badge label={order.settledAt ? "Paid" : "Outstanding"} />
+                        <Badge label={task.priority} />
+                      </td>
+                      <td>
+                        <Badge label={task.status} />
+                      </td>
+                      <td>{task.notes ?? "-"}</td>
+                      <td>{task.attachments.length > 0 ? task.attachments.join(", ") : "-"}</td>
+                      <td className="actions-cell">
+                        {task.status !== "Done" && (
+                          <button className="secondary-button" onClick={() => onCompleteTask(task.id)} type="button">
+                            Mark Done
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -7992,220 +8883,636 @@ function ConferenceDetailDrawer({
               </table>
             </div>
           )}
-          {linkedActivities.length > 0 && (
+          <div className="form-grid">
+            <Field label="Department">
+              <select value={taskDepartment} onChange={(event) => setTaskDepartment(event.target.value as ConferenceDepartment)}>
+                {CONFERENCE_DEPARTMENTS.map((department) => (
+                  <option key={department} value={department}>
+                    {department}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Task">
+              <input
+                value={taskDescription}
+                onChange={(event) => setTaskDescription(event.target.value)}
+                placeholder="e.g. Confirm menu with kitchen"
+              />
+            </Field>
+            <Field label="Owner">
+              <input value={taskOwner} onChange={(event) => setTaskOwner(event.target.value)} placeholder="e.g. Memory" />
+            </Field>
+            <Field label="Due Date">
+              <select value={taskDueDate} onChange={(event) => setTaskDueDate(event.target.value)}>
+                {dates.map((date) => (
+                  <option key={date} value={date}>
+                    {date}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Priority">
+              <select value={taskPriority} onChange={(event) => setTaskPriority(event.target.value as ConferenceTaskPriority)}>
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+              </select>
+            </Field>
+            <Field label="Attachment (optional)">
+              <input
+                value={taskAttachmentName}
+                onChange={(event) => setTaskAttachmentName(event.target.value)}
+                placeholder="e.g. seating-plan.pdf"
+              />
+            </Field>
+          </div>
+          <Field label="Notes (optional)">
+            <textarea value={taskNotes} onChange={(event) => setTaskNotes(event.target.value)} rows={2} />
+          </Field>
+          <div className="sheet-footer">
+            <button
+              className="secondary-button"
+              disabled={!taskDescription || !taskOwner}
+              onClick={() => {
+                onAddTask(conference.id, {
+                  department: taskDepartment,
+                  description: taskDescription,
+                  owner: taskOwner,
+                  dueDate: taskDueDate,
+                  priority: taskPriority,
+                  notes: taskNotes,
+                  attachmentName: taskAttachmentName,
+                });
+                setTaskDescription("");
+                setTaskOwner("");
+                setTaskNotes("");
+                setTaskAttachmentName("");
+              }}
+              type="button"
+            >
+              <Plus size={16} />
+              Add Task
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "Timeline" && (
+        <div className="form-section">
+          <h3>Conference Timeline</h3>
+          <p className="muted">Enquiry through post-event review, derived live from status, deposit and dates.</p>
+          <div className="conference-timeline">
+            {timeline.flatMap((step, index) => {
+              const elements = [
+                <div className={`timeline-step ${step.status}`} key={`step-${step.label}`}>
+                  <div className="timeline-dot" />
+                  <span>{step.label}</span>
+                </div>,
+              ];
+              if (index < timeline.length - 1) {
+                elements.push(
+                  <div className={`timeline-connector ${step.status === "done" ? "done" : ""}`} key={`connector-${step.label}`} />,
+                );
+              }
+              return elements;
+            })}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "Budget" && (
+        <div className="form-section">
+          <h3>Budget Planner</h3>
+          <h3>Revenue by Department (from Quotation)</h3>
+          <div className="table-scroll">
+            <table className="stock-table dashboard-table">
+              <thead>
+                <tr>
+                  <th>Department</th>
+                  <th>Projected Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {revenueByDepartment.map((item) => (
+                  <tr key={item.department}>
+                    <td>{item.department}</td>
+                    <td>{money.format(item.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Costs by Category (Budget vs Actual)</h3>
+          <div className="table-scroll">
+            <table className="stock-table dashboard-table">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th>Budgeted</th>
+                  <th>Actual</th>
+                </tr>
+              </thead>
+              <tbody>
+                {CONFERENCE_BUDGET_CATEGORIES.map((category) => (
+                  <tr key={category}>
+                    <td>{category}</td>
+                    <td>
+                      <input
+                        type="number"
+                        min={0}
+                        {...zeroableNumberInput(budgetDraft[category], (next) => setBudgetDraft((current) => ({ ...current, [category]: next })))}
+                      />
+                    </td>
+                    <td>{category === "Procurement" ? money.format(financials.actualProcurementCost) : money.format(budgetDraft[category])}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {budgetDirty && (
+            <button
+              className="secondary-button"
+              onClick={() =>
+                onUpdateBudget(
+                  conference.id,
+                  CONFERENCE_BUDGET_CATEGORIES.map((category) => ({ category, budgeted: budgetDraft[category] })),
+                )
+              }
+              type="button"
+            >
+              Save Budget
+            </button>
+          )}
+          <div className="folio-line">
+            <span>Projected Revenue</span>
+            <strong>{money.format(budgetTotals.projectedRevenue)}</strong>
+          </div>
+          <div className="folio-line">
+            <span>Projected Cost</span>
+            <strong>{money.format(budgetTotals.projectedCost)}</strong>
+          </div>
+          <div className="folio-line total">
+            <span>Projected Profit ({(budgetTotals.projectedMargin * 100).toFixed(0)}% margin)</span>
+            <strong>{money.format(budgetTotals.projectedProfit)}</strong>
+          </div>
+          <div className="folio-line">
+            <span>Actual Revenue</span>
+            <strong>{money.format(financials.actualRevenue)}</strong>
+          </div>
+          <div className="folio-line">
+            <span>Actual Cost</span>
+            <strong>{money.format(financials.actualCost)}</strong>
+          </div>
+          <div className="folio-line total">
+            <span>Actual Profit</span>
+            <strong>{money.format(financials.actualProfit)}</strong>
+          </div>
+          <div className="folio-line total">
+            <span>Budget Variance</span>
+            <strong className={budgetVariance < 0 ? "stock-low-cell" : ""}>
+              {budgetVariance >= 0 ? "+" : ""}
+              {money.format(budgetVariance)}
+            </strong>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "Procurement" && (
+        <div className="form-section">
+          <h3>Procurement Planner</h3>
+          <div className="form-grid">
+            <Field label="Meal Package">
+              <input disabled value={conference.mealPackage} />
+            </Field>
+            <Field label="Guests">
+              <input disabled value={conference.guestCount.toString()} />
+            </Field>
+            <Field label="Nights">
+              <input disabled value={nights.toString()} />
+            </Field>
+          </div>
+          <button
+            className="secondary-button"
+            disabled={Boolean(openProcurementRequest)}
+            onClick={() => onGenerateProcurement(conference.id)}
+            type="button"
+          >
+            <Package size={16} />
+            Generate Procurement Request
+          </button>
+          {openProcurementRequest && (
+            <p className="muted">
+              {openProcurementRequest.id} is already {openProcurementRequest.status.toLowerCase()} - approve, reject, or convert it in Procurement
+              &amp; Stores before generating another.
+            </p>
+          )}
+
+          <h3>Purchase Requests</h3>
+          {linkedRequests.length > 0 ? (
             <div className="table-scroll">
               <table className="stock-table dashboard-table">
                 <thead>
                   <tr>
-                    <th>Booking</th>
-                    <th>Activity</th>
-                    <th>Participants</th>
-                    <th>Total</th>
+                    <th>Request</th>
+                    <th>Items</th>
+                    <th>Estimated Total</th>
+                    <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {linkedActivities.map((booking) => (
-                    <tr key={booking.id}>
-                      <td>{booking.id}</td>
-                      <td>{booking.activity}</td>
-                      <td>{booking.participants}</td>
-                      <td>{money.format(booking.price)}</td>
+                  {linkedRequests.map((request) => (
+                    <tr key={request.id}>
+                      <td>{request.id}</td>
+                      <td>{request.items.map((item) => item.description).join(", ")}</td>
+                      <td>{money.format(request.estimatedTotal)}</td>
+                      <td>
+                        <Badge label={request.status} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="muted">No procurement requests generated yet.</p>
+          )}
+
+          <h3>Purchase Orders &amp; Goods Received</h3>
+          {linkedPurchaseOrders.length > 0 ? (
+            <div className="table-scroll">
+              <table className="stock-table dashboard-table">
+                <thead>
+                  <tr>
+                    <th>Order</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linkedPurchaseOrders.map((order) => (
+                    <tr key={order.id}>
+                      <td>{order.id}</td>
+                      <td>{money.format(order.total)}</td>
+                      <td>
+                        <Badge label={order.status} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="muted">No purchase orders issued yet - approve a request in Procurement &amp; Stores first.</p>
+          )}
+        </div>
+      )}
+
+      {activeTab === "Financial" && (
+        <div className="form-section">
+          <h3>Financial Summary</h3>
+          <div className="dashboard-summary-grid">
+            <article className="summary-stat">
+              <span>Projected Revenue</span>
+              <strong>{money.format(budgetTotals.projectedRevenue)}</strong>
+              <p>Actual {money.format(financials.actualRevenue)}</p>
+            </article>
+            <article className="summary-stat">
+              <span>Projected Cost</span>
+              <strong>{money.format(budgetTotals.projectedCost)}</strong>
+              <p>Actual {money.format(financials.actualCost)}</p>
+            </article>
+            <article className="summary-stat">
+              <span>Profit</span>
+              <strong>{money.format(financials.actualProfit)}</strong>
+              <p>Projected {money.format(budgetTotals.projectedProfit)}</p>
+            </article>
+            <article className="summary-stat">
+              <span>Margin</span>
+              <strong>
+                {financials.actualRevenue > 0 ? `${((financials.actualProfit / financials.actualRevenue) * 100).toFixed(0)}%` : "-"}
+              </strong>
+              <p>Projected {(budgetTotals.projectedMargin * 100).toFixed(0)}%</p>
+            </article>
+            <article className="summary-stat">
+              <span>Outstanding</span>
+              <strong>{money.format(conferenceOutstandingBalance)}</strong>
+              <p>Deposit + guest balances</p>
+            </article>
+          </div>
+
+          <h3>Department Contribution (Actual)</h3>
+          <div className="table-scroll">
+            <table className="stock-table dashboard-table">
+              <thead>
+                <tr>
+                  <th>Department</th>
+                  <th>Actual Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Accommodation</td>
+                  <td>{money.format(financials.actualAccommodationRevenue)}</td>
+                </tr>
+                <tr>
+                  <td>Restaurant &amp; Catering</td>
+                  <td>{money.format(financials.actualFoodBeverageRevenue)}</td>
+                </tr>
+                <tr>
+                  <td>Activities</td>
+                  <td>{money.format(financials.actualActivitiesRevenue)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "Documents" && (
+        <div className="form-section">
+          <h3>Document Centre</h3>
+          <h3>Generated Documents</h3>
+          <div className="table-scroll">
+            <table className="stock-table dashboard-table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Reference</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {conference.quotationPrintedAt && (
+                  <tr>
+                    <td>Quotation</td>
+                    <td>{conference.conferenceNumber}</td>
+                    <td>{conference.quotationPrintedAt}</td>
+                  </tr>
+                )}
+                {linkedPurchaseOrders.map((order) => (
+                  <tr key={order.id}>
+                    <td>Purchase Order</td>
+                    <td>{order.id}</td>
+                    <td>{order.issueDate}</td>
+                  </tr>
+                ))}
+                {linkedReceipts.map((receipt) => (
+                  <tr key={receipt.id}>
+                    <td>Receipt</td>
+                    <td>{receipt.id}</td>
+                    <td>{receipt.time}</td>
+                  </tr>
+                ))}
+                {!conference.quotationPrintedAt && linkedPurchaseOrders.length === 0 && linkedReceipts.length === 0 && (
+                  <tr>
+                    <td colSpan={3}>
+                      <p className="muted">No generated documents yet.</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Other Documents</h3>
+          {documents.length > 0 && (
+            <div className="table-scroll">
+              <table className="stock-table dashboard-table">
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    <th>Name</th>
+                    <th>Added By</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {documents.map((document) => (
+                    <tr key={document.id}>
+                      <td>{document.category}</td>
+                      <td>{document.name}</td>
+                      <td>{document.addedBy}</td>
+                      <td>{document.addedAt}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
+          <div className="form-grid">
+            <Field label="Category">
+              <select value={docCategory} onChange={(event) => setDocCategory(event.target.value as ConferenceDocumentCategory)}>
+                {CONFERENCE_DOCUMENT_CATEGORIES.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Document Name">
+              <input value={docName} onChange={(event) => setDocName(event.target.value)} placeholder="e.g. Guest List - 28 pax.xlsx" />
+            </Field>
+            <Field label="Added By">
+              <input value={docAddedBy} onChange={(event) => setDocAddedBy(event.target.value)} placeholder="e.g. Tendai" />
+            </Field>
+          </div>
+          <Field label="Note (optional)">
+            <input value={docNote} onChange={(event) => setDocNote(event.target.value)} />
+          </Field>
+          <div className="sheet-footer">
+            <button
+              className="secondary-button"
+              disabled={!docName || !docAddedBy}
+              onClick={() => {
+                onAddDocument(conference.id, { category: docCategory, name: docName, addedBy: docAddedBy, note: docNote });
+                setDocName("");
+                setDocAddedBy("");
+                setDocNote("");
+              }}
+              type="button"
+            >
+              <Plus size={16} />
+              Add Document
+            </button>
+          </div>
         </div>
       )}
 
-      <div className="form-section">
-        <h3>Budget vs Actual</h3>
-        <div className="table-scroll">
-          <table className="stock-table dashboard-table">
-            <thead>
-              <tr>
-                <th>Category</th>
-                <th>Budgeted</th>
-                <th>Actual</th>
-              </tr>
-            </thead>
-            <tbody>
-              {CONFERENCE_BUDGET_CATEGORIES.map((category) => (
-                <tr key={category}>
-                  <td>{category}</td>
-                  <td>
-                    <input
-                      type="number"
-                      min={0}
-                      {...zeroableNumberInput(budgetDraft[category], (next) => setBudgetDraft((current) => ({ ...current, [category]: next })))}
-                    />
-                  </td>
-                  <td>{category === "Procurement" ? money.format(financials.actualProcurementCost) : money.format(budgetDraft[category])}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {budgetDirty && (
-          <button
-            className="secondary-button"
-            onClick={() =>
-              onUpdateBudget(
-                conference.id,
-                CONFERENCE_BUDGET_CATEGORIES.map((category) => ({ category, budgeted: budgetDraft[category] })),
-              )
-            }
-            type="button"
-          >
-            Save Budget
-          </button>
-        )}
-        <div className="folio-line">
-          <span>Projected Revenue (Quotation)</span>
-          <strong>{money.format(budgetTotals.projectedRevenue)}</strong>
-        </div>
-        <div className="folio-line">
-          <span>Projected Cost (Budget)</span>
-          <strong>{money.format(budgetTotals.projectedCost)}</strong>
-        </div>
-        <div className="folio-line total">
-          <span>Projected Profit ({(budgetTotals.projectedMargin * 100).toFixed(0)}% margin)</span>
-          <strong>{money.format(budgetTotals.projectedProfit)}</strong>
-        </div>
-        <div className="folio-line">
-          <span>Actual Revenue (accommodation, restaurant &amp; activities linked to this conference)</span>
-          <strong>{money.format(financials.actualRevenue)}</strong>
-        </div>
-        <div className="folio-line total">
-          <span>Actual Profit</span>
-          <strong>{money.format(financials.actualProfit)}</strong>
-        </div>
-      </div>
-
-      <div className="form-section">
-        <h3>Deposit</h3>
-        <div className="folio-line">
-          <span>Required</span>
-          <strong>{money.format(conference.quotation.depositRequired)}</strong>
-        </div>
-        <div className="folio-line">
-          <span>Received</span>
-          <strong>{money.format(conference.depositReceivedAmount ?? 0)}</strong>
-        </div>
-        <div className="folio-line total">
-          <span>Outstanding</span>
-          <strong>{money.format(depositOutstanding)}</strong>
-        </div>
-        {depositOutstanding > 0 && (
+      {activeTab === "Communication" && (
+        <div className="form-section">
+          <h3>Communication Log</h3>
+          {communicationLogs.length > 0 && (
+            <div className="table-scroll">
+              <table className="stock-table dashboard-table">
+                <thead>
+                  <tr>
+                    <th>Channel</th>
+                    <th>Date</th>
+                    <th>User</th>
+                    <th>Summary</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {communicationLogs.map((log) => (
+                    <tr key={log.id}>
+                      <td>{log.channel}</td>
+                      <td>{log.date}</td>
+                      <td>{log.user}</td>
+                      <td>{log.summary}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           <div className="form-grid">
-            <Field label="Amount Received">
-              <input type="number" min={0} max={depositOutstanding} {...zeroableNumberInput(depositAmount, setDepositAmount)} />
+            <Field label="Channel">
+              <select value={commChannel} onChange={(event) => setCommChannel(event.target.value as ConferenceCommunicationChannel)}>
+                {CONFERENCE_COMMUNICATION_CHANNELS.map((channel) => (
+                  <option key={channel} value={channel}>
+                    {channel}
+                  </option>
+                ))}
+              </select>
             </Field>
-            <button className="secondary-button" onClick={() => onRecordDeposit(conference.id, depositAmount)} type="button">
-              Record Deposit
+            <Field label="Date">
+              <select value={commDate} onChange={(event) => setCommDate(event.target.value)}>
+                {dates.map((date) => (
+                  <option key={date} value={date}>
+                    {date}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="User">
+              <input value={commUser} onChange={(event) => setCommUser(event.target.value)} placeholder="e.g. Tendai" />
+            </Field>
+          </div>
+          <Field label="Summary">
+            <textarea value={commSummary} onChange={(event) => setCommSummary(event.target.value)} rows={2} placeholder="What was discussed?" />
+          </Field>
+          <div className="sheet-footer">
+            <button
+              className="secondary-button"
+              disabled={!commUser || !commSummary}
+              onClick={() => {
+                onAddCommunicationLog(conference.id, { channel: commChannel, date: commDate, user: commUser, summary: commSummary });
+                setCommUser("");
+                setCommSummary("");
+              }}
+              type="button"
+            >
+              <Plus size={16} />
+              Log Communication
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      <div className="form-section">
-        <h3>Task Board</h3>
-        {tasks.length > 0 && (
-          <div className="table-scroll">
-            <table className="stock-table dashboard-table">
-              <thead>
-                <tr>
-                  <th>Department</th>
-                  <th>Task</th>
-                  <th>Owner</th>
-                  <th>Due</th>
-                  <th>Priority</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tasks.map((task) => (
-                  <tr key={task.id}>
-                    <td>{task.department}</td>
-                    <td>{task.description}</td>
-                    <td>{task.owner}</td>
-                    <td>{task.dueDate}</td>
-                    <td>
-                      <Badge label={task.priority} />
-                    </td>
-                    <td>
-                      <Badge label={task.status} />
-                    </td>
-                    <td className="actions-cell">
-                      {task.status !== "Done" && (
-                        <button className="secondary-button" onClick={() => onCompleteTask(task.id)} type="button">
-                          Mark Done
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        <div className="form-grid">
-          <Field label="Department">
-            <select value={taskDepartment} onChange={(event) => setTaskDepartment(event.target.value as ConferenceDepartment)}>
-              {CONFERENCE_DEPARTMENTS.map((department) => (
-                <option key={department} value={department}>
-                  {department}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Task">
-            <input value={taskDescription} onChange={(event) => setTaskDescription(event.target.value)} placeholder="e.g. Confirm menu with kitchen" />
-          </Field>
-          <Field label="Owner">
-            <input value={taskOwner} onChange={(event) => setTaskOwner(event.target.value)} placeholder="e.g. Memory" />
-          </Field>
-          <Field label="Due Date">
-            <select value={taskDueDate} onChange={(event) => setTaskDueDate(event.target.value)}>
-              {dates.map((date) => (
-                <option key={date} value={date}>
-                  {date}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Priority">
-            <select value={taskPriority} onChange={(event) => setTaskPriority(event.target.value as ConferenceTaskPriority)}>
-              <option value="Low">Low</option>
-              <option value="Medium">Medium</option>
-              <option value="High">High</option>
-            </select>
-          </Field>
+      {activeTab === "Post-Event" && (
+        <div className="form-section">
+          <h3>Post Event Review</h3>
+          {postEventReview ? (
+            <>
+              <div className="folio-line">
+                <span>Attendance</span>
+                <strong>{postEventReview.attendance}</strong>
+              </div>
+              <div className="folio-line">
+                <span>Rating</span>
+                <strong>{postEventReview.rating} / 5</strong>
+              </div>
+              <Field label="Customer Feedback">
+                <textarea disabled value={postEventReview.customerFeedback} rows={2} />
+              </Field>
+              <Field label="Incidents">
+                <textarea disabled value={postEventReview.incidents} rows={2} />
+              </Field>
+              <Field label="Lessons Learned">
+                <textarea disabled value={postEventReview.lessonsLearned} rows={2} />
+              </Field>
+              <Field label="Recommendations">
+                <textarea disabled value={postEventReview.recommendations} rows={2} />
+              </Field>
+              <Field label="Management Comments">
+                <textarea disabled value={postEventReview.managementComments} rows={2} />
+              </Field>
+              <p className="muted">
+                Submitted by {postEventReview.submittedBy} on {postEventReview.submittedAt}
+              </p>
+            </>
+          ) : canSubmitPostEventReview ? (
+            <>
+              <div className="form-grid">
+                <Field label="Attendance">
+                  <input type="number" min={0} {...zeroableNumberInput(reviewAttendance, setReviewAttendance)} />
+                </Field>
+                <Field label="Rating (1-5)">
+                  <select value={reviewRating} onChange={(event) => setReviewRating(Number(event.target.value))}>
+                    {[1, 2, 3, 4, 5].map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Submitted By">
+                  <input
+                    value={reviewSubmittedBy}
+                    onChange={(event) => setReviewSubmittedBy(event.target.value)}
+                    placeholder="e.g. Operations Manager"
+                  />
+                </Field>
+              </div>
+              <Field label="Customer Feedback">
+                <textarea value={reviewFeedback} onChange={(event) => setReviewFeedback(event.target.value)} rows={2} />
+              </Field>
+              <Field label="Incidents">
+                <textarea
+                  value={reviewIncidents}
+                  onChange={(event) => setReviewIncidents(event.target.value)}
+                  rows={2}
+                  placeholder="None reported, if applicable"
+                />
+              </Field>
+              <Field label="Lessons Learned">
+                <textarea value={reviewLessons} onChange={(event) => setReviewLessons(event.target.value)} rows={2} />
+              </Field>
+              <Field label="Recommendations">
+                <textarea value={reviewRecommendations} onChange={(event) => setReviewRecommendations(event.target.value)} rows={2} />
+              </Field>
+              <Field label="Management Comments">
+                <textarea value={reviewManagementComments} onChange={(event) => setReviewManagementComments(event.target.value)} rows={2} />
+              </Field>
+              <div className="sheet-footer">
+                <button
+                  className="secondary-button"
+                  disabled={!reviewSubmittedBy || !reviewFeedback}
+                  onClick={() =>
+                    onSubmitPostEventReview(conference.id, {
+                      attendance: reviewAttendance,
+                      customerFeedback: reviewFeedback,
+                      incidents: reviewIncidents,
+                      lessonsLearned: reviewLessons,
+                      recommendations: reviewRecommendations,
+                      rating: reviewRating,
+                      managementComments: reviewManagementComments,
+                      submittedBy: reviewSubmittedBy,
+                    })
+                  }
+                  type="button"
+                >
+                  Submit Review
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="muted">The post event review becomes available once the conference is in progress or completed.</p>
+          )}
         </div>
-        <div className="sheet-footer">
-          <button
-            className="secondary-button"
-            disabled={!taskDescription || !taskOwner}
-            onClick={() => {
-              onAddTask(conference.id, {
-                department: taskDepartment,
-                description: taskDescription,
-                owner: taskOwner,
-                dueDate: taskDueDate,
-                priority: taskPriority,
-              });
-              setTaskDescription("");
-              setTaskOwner("");
-            }}
-            type="button"
-          >
-            <Plus size={16} />
-            Add Task
-          </button>
-        </div>
-      </div>
+      )}
     </Drawer>
   );
 }
@@ -8361,15 +9668,17 @@ function Drawer({
   description,
   onClose,
   children,
+  wide,
 }: {
   title: string;
   description?: string;
   onClose: () => void;
   children: React.ReactNode;
+  wide?: boolean;
 }) {
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="drawer-panel" onClick={(event) => event.stopPropagation()}>
+      <div className={`drawer-panel ${wide ? "drawer-panel-wide" : ""}`} onClick={(event) => event.stopPropagation()}>
         <div className="sheet-header">
           <div>
             <h2>{title}</h2>

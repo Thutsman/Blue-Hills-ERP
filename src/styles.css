@@ -1170,6 +1170,114 @@ tr:hover td {
   width: 100%;
 }
 
+.drawer-panel-wide {
+  max-width: 760px;
+}
+
+.tab-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.readiness-bar {
+  background: #e5e7eb;
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.readiness-bar-fill {
+  background: #0f4c81;
+  height: 100%;
+}
+
+.readiness-bar-fill.ready {
+  background: #16a34a;
+}
+
+.readiness-bar-fill.not-started {
+  background: #991b1b;
+}
+
+.readiness-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.readiness-card {
+  background: #ffffff;
+  border: 1px solid #edf1f5;
+  border-radius: 14px;
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.readiness-card-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.conference-timeline {
+  align-items: flex-start;
+  display: flex;
+  overflow-x: auto;
+  padding: 8px 0 16px;
+}
+
+.timeline-step {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 76px;
+}
+
+.timeline-dot {
+  background: #e5e7eb;
+  border-radius: 999px;
+  height: 14px;
+  width: 14px;
+}
+
+.timeline-step.done .timeline-dot {
+  background: #16a34a;
+}
+
+.timeline-step.current .timeline-dot {
+  background: #0f4c81;
+  box-shadow: 0 0 0 4px rgba(15, 76, 129, 0.18);
+}
+
+.timeline-step span {
+  color: #536071;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.timeline-step.done span,
+.timeline-step.current span {
+  color: #142033;
+}
+
+.timeline-connector {
+  background: #e5e7eb;
+  flex: 1;
+  height: 2px;
+  margin-top: 6px;
+  min-width: 16px;
+}
+
+.timeline-connector.done {
+  background: #16a34a;
+}
+
 .sheet-header {
   align-items: flex-start;
   border-bottom: 1px solid #edf1f5;
