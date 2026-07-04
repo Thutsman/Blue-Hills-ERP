@@ -41,7 +41,7 @@ import {
   Warehouse,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 
 type ModuleId =
@@ -1346,11 +1346,11 @@ function zeroableNumberInput(value: number, setValue: (next: number) => void) {
 const navigation: Array<{ id: ModuleId; label: string; icon: LucideIcon }> = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "frontOffice", label: "Front Office", icon: Hotel },
-  { id: "restaurant", label: "Restaurant & Kitchen", icon: Utensils },
+  { id: "conference", label: "Conferences & Events", icon: CalendarRange },
   { id: "operations", label: "Housekeeping & Activities", icon: BedDouble },
   { id: "procurement", label: "Procurement & Stores", icon: Warehouse },
   { id: "finance", label: "Finance & Night Audit", icon: CreditCard },
-  { id: "conference", label: "Conferences & Events", icon: CalendarRange },
+  { id: "restaurant", label: "Restaurant & Kitchen", icon: Utensils },
 ];
 
 const dates = ["Jul 02", "Jul 03", "Jul 04", "Jul 05", "Jul 06", "Jul 07"];
@@ -8581,6 +8581,18 @@ function ConferenceDetailDrawer({
   const [reviewManagementComments, setReviewManagementComments] = useState("");
   const [reviewSubmittedBy, setReviewSubmittedBy] = useState("");
 
+  const taskBoardRef = useRef<HTMLDivElement>(null);
+  const documentsRef = useRef<HTMLDivElement>(null);
+  const communicationRef = useRef<HTMLDivElement>(null);
+  const scrollToTop = (ref: React.RefObject<HTMLDivElement | null>) => {
+    // Deferred to the next frame: calling scrollIntoView synchronously in the
+    // click handler races the DOM update that inserts the new row (added
+    // above this element), and the layout shift mid-animation derails the
+    // smooth scroll, leaving it wherever the browser's own pre-click
+    // actionability scroll landed instead of the intended position.
+    requestAnimationFrame(() => requestAnimationFrame(() => ref.current?.scrollIntoView({ behavior: "smooth", block: "start" })));
+  };
+
   const currentIndex = CONFERENCE_STATUS_ORDER.indexOf(conference.status);
   const nextStatus = currentIndex >= 0 && currentIndex < CONFERENCE_STATUS_ORDER.length - 1 ? CONFERENCE_STATUS_ORDER[currentIndex + 1] : null;
   const canCancel = conference.status !== "Cancelled" && conference.status !== "Completed";
@@ -8886,7 +8898,7 @@ function ConferenceDetailDrawer({
       )}
 
       {activeTab === "Tasks" && (
-        <div className="form-section">
+        <div className="form-section" ref={taskBoardRef}>
           <h3>Task Board</h3>
           {tasks.length > 0 && (
             <div className="table-scroll">
@@ -8997,6 +9009,7 @@ function ConferenceDetailDrawer({
                 setTaskOwner("");
                 setTaskNotes("");
                 setTaskAttachmentName("");
+                scrollToTop(taskBoardRef);
               }}
               type="button"
             >
@@ -9280,7 +9293,7 @@ function ConferenceDetailDrawer({
       )}
 
       {activeTab === "Documents" && (
-        <div className="form-section">
+        <div className="form-section" ref={documentsRef}>
           <h3>Document Centre</h3>
           <h3>Generated Documents</h3>
           <div className="table-scroll">
@@ -9379,6 +9392,7 @@ function ConferenceDetailDrawer({
                 setDocName("");
                 setDocAddedBy("");
                 setDocNote("");
+                scrollToTop(documentsRef);
               }}
               type="button"
             >
@@ -9390,7 +9404,7 @@ function ConferenceDetailDrawer({
       )}
 
       {activeTab === "Communication" && (
-        <div className="form-section">
+        <div className="form-section" ref={communicationRef}>
           <h3>Communication Log</h3>
           {communicationLogs.length > 0 && (
             <div className="table-scroll">
@@ -9450,6 +9464,7 @@ function ConferenceDetailDrawer({
                 onAddCommunicationLog(conference.id, { channel: commChannel, date: commDate, user: commUser, summary: commSummary });
                 setCommUser("");
                 setCommSummary("");
+                scrollToTop(communicationRef);
               }}
               type="button"
             >
