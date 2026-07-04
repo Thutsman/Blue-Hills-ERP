@@ -1992,6 +1992,16 @@ function computeConferenceDepositOutstanding(conference: Conference): number {
   return Math.max(0, conference.quotation.depositRequired - (conference.depositReceivedAmount ?? 0));
 }
 
+// "Paid" only means something once a deposit was actually required - a
+// conference whose quotation never set a deposit amount has trivially $0
+// outstanding, but labelling that "Paid" falsely implies money changed hands.
+function formatConferenceDepositStatus(conference: Conference): string {
+  if (conference.quotation.depositRequired <= 0) return "No Deposit Set";
+  return computeConferenceDepositOutstanding(conference) > 0
+    ? `${money.format(computeConferenceDepositOutstanding(conference))} due`
+    : "Paid";
+}
+
 type ConferenceFinancials = {
   actualAccommodationRevenue: number;
   actualFoodBeverageRevenue: number;
@@ -4469,6 +4479,22 @@ function App() {
     );
   };
 
+  const updateConferenceDepositRequired = (id: string, amount: number) => {
+    const conference = state.conferences.find((item) => item.id === id);
+    if (!conference || amount < 0) return;
+
+    withAudit(
+      {
+        ...state,
+        conferences: state.conferences.map((item) =>
+          item.id === id ? { ...item, quotation: { ...item.quotation, depositRequired: amount } } : item,
+        ),
+      },
+      `Deposit required set to ${money.format(amount)} for ${conference.name}`,
+      "Sales & Marketing",
+    );
+  };
+
   const allocateConferenceRoom = (id: string, roomNumber: string) => {
     const conference = state.conferences.find((item) => item.id === id);
     if (!conference) return;
@@ -5115,6 +5141,7 @@ function App() {
             onAdvanceStatus={advanceConferenceStatus}
             onCancelConference={cancelConference}
             onRecordDeposit={recordConferenceDeposit}
+            onUpdateDepositRequired={updateConferenceDepositRequired}
             onAllocateRoom={allocateConferenceRoom}
             onGenerateProcurement={generateConferenceProcurement}
             onUpdateBudget={updateConferenceBudget}
@@ -7919,6 +7946,7 @@ function Conference({
   onAdvanceStatus,
   onCancelConference,
   onRecordDeposit,
+  onUpdateDepositRequired,
   onAllocateRoom,
   onGenerateProcurement,
   onUpdateBudget,
@@ -7934,6 +7962,7 @@ function Conference({
   onAdvanceStatus: (id: string) => void;
   onCancelConference: (id: string) => void;
   onRecordDeposit: (id: string, amount: number) => void;
+  onUpdateDepositRequired: (id: string, amount: number) => void;
   onAllocateRoom: (id: string, roomNumber: string) => void;
   onGenerateProcurement: (id: string) => void;
   onUpdateBudget: (conferenceId: string, budgetLines: ConferenceBudgetLine[]) => void;
@@ -8034,7 +8063,6 @@ function Conference({
             {state.conferences.map((conference) => {
               const budget = computeConferenceBudgetTotals(conference);
               const roomsAllocated = computeConferenceRoomsAllocated(state, conference.id);
-              const depositOutstanding = computeConferenceDepositOutstanding(conference);
               const readiness = computeOverallReadiness(computeDepartmentReadiness(state, conference));
               return (
                 <tr key={conference.id}>
@@ -8058,7 +8086,7 @@ function Conference({
                   </td>
                   <td className={readiness < 60 ? "stock-low-cell" : ""}>{readiness}%</td>
                   <td>{money.format(budget.projectedProfit)}</td>
-                  <td>{depositOutstanding > 0 ? `${money.format(depositOutstanding)} due` : "Paid"}</td>
+                  <td>{formatConferenceDepositStatus(conference)}</td>
                   <td className="actions-cell">
                     <button className="secondary-button" onClick={() => setDetailId(conference.id)} type="button">
                       View
@@ -8142,6 +8170,7 @@ function Conference({
           onAdvanceStatus={onAdvanceStatus}
           onCancelConference={onCancelConference}
           onRecordDeposit={onRecordDeposit}
+          onUpdateDepositRequired={onUpdateDepositRequired}
           onAllocateRoom={onAllocateRoom}
           onGenerateProcurement={onGenerateProcurement}
           onUpdateBudget={onUpdateBudget}
@@ -8448,6 +8477,7 @@ function ConferenceDetailDrawer({
   onAdvanceStatus,
   onCancelConference,
   onRecordDeposit,
+  onUpdateDepositRequired,
   onAllocateRoom,
   onGenerateProcurement,
   onUpdateBudget,
@@ -8464,6 +8494,7 @@ function ConferenceDetailDrawer({
   onAdvanceStatus: (id: string) => void;
   onCancelConference: (id: string) => void;
   onRecordDeposit: (id: string, amount: number) => void;
+  onUpdateDepositRequired: (id: string, amount: number) => void;
   onAllocateRoom: (id: string, roomNumber: string) => void;
   onGenerateProcurement: (id: string) => void;
   onUpdateBudget: (conferenceId: string, budgetLines: ConferenceBudgetLine[]) => void;
@@ -8510,6 +8541,7 @@ function ConferenceDetailDrawer({
   const availableRooms = state.rooms.filter((room) => room.status === "Available" && !allocatedRoomNumbers.has(room.number));
   const [roomChoice, setRoomChoice] = useState(availableRooms[0]?.number ?? "");
   const [depositAmount, setDepositAmount] = useState(depositOutstanding > 0 ? depositOutstanding : 0);
+  const [depositRequiredDraft, setDepositRequiredDraft] = useState(conference.quotation.depositRequired);
 
   const [budgetDraft, setBudgetDraft] = useState<Record<ConferenceBudgetCategory, number>>(() => {
     const draft = {} as Record<ConferenceBudgetCategory, number>;
@@ -8624,8 +8656,14 @@ function ConferenceDetailDrawer({
               </article>
               <article className="summary-stat">
                 <span>Deposit</span>
-                <strong>{depositOutstanding > 0 ? money.format(depositOutstanding) : "Paid"}</strong>
-                <p>{depositOutstanding > 0 ? "outstanding" : `received ${conference.depositReceivedAt ?? ""}`}</p>
+                <strong>{formatConferenceDepositStatus(conference)}</strong>
+                <p>
+                  {conference.quotation.depositRequired <= 0
+                    ? "quotation has no deposit amount yet"
+                    : depositOutstanding > 0
+                      ? "outstanding"
+                      : `received ${conference.depositReceivedAt ?? ""}`}
+                </p>
               </article>
               <article className="summary-stat">
                 <span>Outstanding Balance</span>
@@ -8644,10 +8682,23 @@ function ConferenceDetailDrawer({
 
           <div className="form-section">
             <h3>Deposit</h3>
-            <div className="folio-line">
-              <span>Required</span>
-              <strong>{money.format(conference.quotation.depositRequired)}</strong>
+            <div className="form-grid">
+              <Field label="Deposit Required (USD)">
+                <input type="number" min={0} {...zeroableNumberInput(depositRequiredDraft, setDepositRequiredDraft)} />
+              </Field>
+              {depositRequiredDraft !== conference.quotation.depositRequired && (
+                <button
+                  className="secondary-button"
+                  onClick={() => onUpdateDepositRequired(conference.id, depositRequiredDraft)}
+                  type="button"
+                >
+                  Save Deposit Required
+                </button>
+              )}
             </div>
+            {conference.quotation.depositRequired <= 0 && (
+              <p className="muted">No deposit amount has been set for this quotation yet - set one above before recording a payment.</p>
+            )}
             <div className="folio-line">
               <span>Received</span>
               <strong>{money.format(conference.depositReceivedAmount ?? 0)}</strong>
@@ -8656,16 +8707,14 @@ function ConferenceDetailDrawer({
               <span>Outstanding</span>
               <strong>{money.format(depositOutstanding)}</strong>
             </div>
-            {depositOutstanding > 0 && (
-              <div className="form-grid">
-                <Field label="Amount Received">
-                  <input type="number" min={0} max={depositOutstanding} {...zeroableNumberInput(depositAmount, setDepositAmount)} />
-                </Field>
-                <button className="secondary-button" onClick={() => onRecordDeposit(conference.id, depositAmount)} type="button">
-                  Record Deposit
-                </button>
-              </div>
-            )}
+            <div className="form-grid">
+              <Field label="Amount Received">
+                <input type="number" min={0} {...zeroableNumberInput(depositAmount, setDepositAmount)} />
+              </Field>
+              <button className="secondary-button" disabled={depositAmount <= 0} onClick={() => onRecordDeposit(conference.id, depositAmount)} type="button">
+                Record Deposit
+              </button>
+            </div>
           </div>
 
           <div className="form-section">
