@@ -1205,6 +1205,17 @@ function nowTime() {
   return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+// Controlled number inputs that default to 0 show a literal "0" the user has
+// to delete first - on mobile keyboards the new digit gets typed alongside
+// it instead of replacing it (e.g. "0" + "2" => "02"). Blanking the field
+// when the value is 0 gives the user an empty box to type into instead.
+function zeroableNumberInput(value: number, setValue: (next: number) => void) {
+  return {
+    value: value === 0 ? "" : value,
+    onChange: (event: React.ChangeEvent<HTMLInputElement>) => setValue(event.target.value === "" ? 0 : Number(event.target.value)),
+  };
+}
+
 const navigation: Array<{ id: ModuleId; label: string; icon: LucideIcon }> = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "frontOffice", label: "Front Office", icon: Hotel },
@@ -7546,10 +7557,10 @@ function ConferenceDrawer({
             </select>
           </Field>
           <Field label="Number of Guests">
-            <input type="number" min={1} value={guestCount} onChange={(event) => setGuestCount(Number(event.target.value))} />
+            <input type="number" min={1} {...zeroableNumberInput(guestCount, setGuestCount)} />
           </Field>
           <Field label="Rooms Required">
-            <input type="number" min={1} value={roomsRequired} onChange={(event) => setRoomsRequired(Number(event.target.value))} />
+            <input type="number" min={1} {...zeroableNumberInput(roomsRequired, setRoomsRequired)} />
           </Field>
           <Field label="Conference Hall">
             <input value={conferenceHall} onChange={(event) => setConferenceHall(event.target.value)} placeholder="e.g. Baobab Hall" />
@@ -7609,40 +7620,40 @@ function ConferenceDrawer({
         <h3>Quotation</h3>
         <div className="form-grid">
           <Field label="Accommodation (USD)">
-            <input type="number" min={0} value={accommodation} onChange={(event) => setAccommodation(Number(event.target.value))} />
+            <input type="number" min={0} {...zeroableNumberInput(accommodation, setAccommodation)} />
           </Field>
           <Field label="Conference Hall (USD)">
-            <input type="number" min={0} value={conferenceHallFee} onChange={(event) => setConferenceHallFee(Number(event.target.value))} />
+            <input type="number" min={0} {...zeroableNumberInput(conferenceHallFee, setConferenceHallFee)} />
           </Field>
           <Field label="Breakfast (USD)">
-            <input type="number" min={0} value={breakfast} onChange={(event) => setBreakfast(Number(event.target.value))} />
+            <input type="number" min={0} {...zeroableNumberInput(breakfast, setBreakfast)} />
           </Field>
           <Field label="Lunch (USD)">
-            <input type="number" min={0} value={lunch} onChange={(event) => setLunch(Number(event.target.value))} />
+            <input type="number" min={0} {...zeroableNumberInput(lunch, setLunch)} />
           </Field>
           <Field label="Dinner (USD)">
-            <input type="number" min={0} value={dinner} onChange={(event) => setDinner(Number(event.target.value))} />
+            <input type="number" min={0} {...zeroableNumberInput(dinner, setDinner)} />
           </Field>
           <Field label="Tea Breaks (USD)">
-            <input type="number" min={0} value={teaBreaks} onChange={(event) => setTeaBreaks(Number(event.target.value))} />
+            <input type="number" min={0} {...zeroableNumberInput(teaBreaks, setTeaBreaks)} />
           </Field>
           <Field label="Activities (USD)">
-            <input type="number" min={0} value={activitiesFee} onChange={(event) => setActivitiesFee(Number(event.target.value))} />
+            <input type="number" min={0} {...zeroableNumberInput(activitiesFee, setActivitiesFee)} />
           </Field>
           <Field label="Transport (USD)">
-            <input type="number" min={0} value={transport} onChange={(event) => setTransport(Number(event.target.value))} />
+            <input type="number" min={0} {...zeroableNumberInput(transport, setTransport)} />
           </Field>
           <Field label="Equipment Hire (USD)">
-            <input type="number" min={0} value={equipmentHire} onChange={(event) => setEquipmentHire(Number(event.target.value))} />
+            <input type="number" min={0} {...zeroableNumberInput(equipmentHire, setEquipmentHire)} />
           </Field>
           <Field label="Other Services (USD)">
-            <input type="number" min={0} value={otherServices} onChange={(event) => setOtherServices(Number(event.target.value))} />
+            <input type="number" min={0} {...zeroableNumberInput(otherServices, setOtherServices)} />
           </Field>
           <Field label="VAT Rate">
-            <input type="number" min={0} max={1} step={0.01} value={vatRate} onChange={(event) => setVatRate(Number(event.target.value))} />
+            <input type="number" min={0} max={1} step={0.01} {...zeroableNumberInput(vatRate, setVatRate)} />
           </Field>
           <Field label="Deposit Required (USD)">
-            <input type="number" min={0} value={depositRequired} onChange={(event) => setDepositRequired(Number(event.target.value))} />
+            <input type="number" min={0} {...zeroableNumberInput(depositRequired, setDepositRequired)} />
           </Field>
           <Field label="Quotation Expiry">
             <select value={expiryDate} onChange={(event) => setExpiryDate(event.target.value)}>
@@ -7752,6 +7763,9 @@ function ConferenceDetailDrawer({
     (reservation) => reservation.conferenceId === conference.id && reservation.status !== "Cancelled",
   );
   const linkedRequests = state.purchaseRequests.filter((request) => request.conferenceId === conference.id);
+  const openProcurementRequest = linkedRequests.find(
+    (request) => request.status === "Pending Approval" || request.status === "Approved",
+  );
   const linkedOrders = state.orders.filter((order) => order.conferenceId === conference.id);
   const linkedActivities = state.activities.filter((booking) => booking.conferenceId === conference.id);
   const tasks = state.conferenceTasks.filter((task) => task.conferenceId === conference.id);
@@ -7906,10 +7920,21 @@ function ConferenceDetailDrawer({
             <input disabled value={nights.toString()} />
           </Field>
         </div>
-        <button className="secondary-button" onClick={() => onGenerateProcurement(conference.id)} type="button">
+        <button
+          className="secondary-button"
+          disabled={Boolean(openProcurementRequest)}
+          onClick={() => onGenerateProcurement(conference.id)}
+          type="button"
+        >
           <Package size={16} />
           Generate Procurement Request
         </button>
+        {openProcurementRequest && (
+          <p className="muted">
+            {openProcurementRequest.id} is already {openProcurementRequest.status.toLowerCase()} - approve, reject, or convert it in Procurement
+            &amp; Stores before generating another.
+          </p>
+        )}
         {linkedRequests.length > 0 && (
           <div className="table-scroll">
             <table className="stock-table dashboard-table">
@@ -8013,8 +8038,7 @@ function ConferenceDetailDrawer({
                     <input
                       type="number"
                       min={0}
-                      value={budgetDraft[category]}
-                      onChange={(event) => setBudgetDraft((current) => ({ ...current, [category]: Number(event.target.value) }))}
+                      {...zeroableNumberInput(budgetDraft[category], (next) => setBudgetDraft((current) => ({ ...current, [category]: next })))}
                     />
                   </td>
                   <td>{category === "Procurement" ? money.format(financials.actualProcurementCost) : money.format(budgetDraft[category])}</td>
@@ -8076,13 +8100,7 @@ function ConferenceDetailDrawer({
         {depositOutstanding > 0 && (
           <div className="form-grid">
             <Field label="Amount Received">
-              <input
-                type="number"
-                min={0}
-                max={depositOutstanding}
-                value={depositAmount}
-                onChange={(event) => setDepositAmount(Number(event.target.value))}
-              />
+              <input type="number" min={0} max={depositOutstanding} {...zeroableNumberInput(depositAmount, setDepositAmount)} />
             </Field>
             <button className="secondary-button" onClick={() => onRecordDeposit(conference.id, depositAmount)} type="button">
               Record Deposit
