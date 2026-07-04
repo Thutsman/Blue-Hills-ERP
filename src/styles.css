@@ -1175,10 +1175,18 @@ tr:hover td {
 }
 
 .tab-row {
+  align-self: start;
   display: flex;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
   gap: 8px;
+  min-height: 42px;
   overflow-x: auto;
   padding-bottom: 4px;
+}
+
+.tab-row button {
+  flex-shrink: 0;
 }
 
 .readiness-bar {
